@@ -10,10 +10,12 @@ import {
 import { GameState, DEFAULT_STATE } from "@/lib/game-types";
 import {
   GameEvent,
+  DailyBriefData,
   getEventForDay,
   applyChoiceAndAdvance,
   skipEventAndAdvance,
   generatePostMortem,
+  generateDailyBrief,
 } from "@/lib/game-engine";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -91,6 +93,105 @@ function MetricBar({
   );
 }
 
+// ---- Daily Brief Sub-component ----
+
+function DailyBrief({
+  brief,
+  onDismiss,
+}: {
+  brief: DailyBriefData;
+  onDismiss: () => void;
+}) {
+  const borderColor =
+    brief.severity === "critical"
+      ? "border-destructive/60"
+      : brief.severity === "warning"
+      ? "border-yellow-400/50"
+      : "border-primary/30";
+
+  const headerColor =
+    brief.severity === "critical"
+      ? "text-destructive"
+      : brief.severity === "warning"
+      ? "text-yellow-400"
+      : "text-primary";
+
+  const diagnosisColor =
+    brief.severity === "critical"
+      ? "text-destructive"
+      : brief.severity === "warning"
+      ? "text-yellow-400"
+      : "text-muted-foreground";
+
+  return (
+    <Card className={`border ${borderColor} bg-card/70`} data-testid="daily-brief">
+      <CardHeader className="pb-2 flex flex-row items-center justify-between">
+        <CardTitle className={`text-xs tracking-widest ${headerColor}`}>
+          DAY {brief.day} BRIEFING
+        </CardTitle>
+        <button
+          onClick={onDismiss}
+          className="text-muted-foreground hover:text-foreground text-xs transition-colors"
+          data-testid="button-dismiss-brief"
+        >
+          [DISMISS]
+        </button>
+      </CardHeader>
+      <CardContent className="space-y-3 pt-0">
+        {/* Metric deltas */}
+        <div className="grid grid-cols-5 gap-1">
+          {brief.deltas.map((d) => {
+            const isPositive = d.delta > 0.4;
+            const isNegative = d.delta < -0.4;
+            const deltaColor = isPositive
+              ? "text-primary"
+              : isNegative
+              ? "text-destructive"
+              : "text-muted-foreground";
+            const sign = isPositive ? "+" : "";
+            const displayVal = d.isInverse
+              ? `${d.current.toFixed(0)}${d.name === "STALENESS" ? "h" : ""}`
+              : `${d.current.toFixed(0)}%`;
+            return (
+              <div key={d.name} className="text-center border border-border/30 px-1 py-1.5">
+                <div className="text-muted-foreground text-[9px] tracking-wider leading-none mb-1">
+                  {d.name}
+                </div>
+                <div className="text-xs font-bold leading-none">{displayVal}</div>
+                <div className={`text-[9px] mt-0.5 leading-none ${deltaColor}`}>
+                  {isPositive || isNegative
+                    ? `${sign}${d.delta.toFixed(1)}`
+                    : "—"}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
+        {/* Last decision */}
+        {brief.lastDecision && (
+          <div className="border-l-2 border-primary/30 pl-2">
+            <div className="text-[9px] text-muted-foreground uppercase tracking-widest mb-0.5">
+              LAST ACTION
+            </div>
+            <div className="text-xs text-foreground/80 italic">
+              &ldquo;{brief.lastDecision}&rdquo;
+            </div>
+          </div>
+        )}
+
+        {/* AI diagnosis */}
+        <div className={`text-xs leading-relaxed ${diagnosisColor} border-t border-border/30 pt-2`}>
+          <span className="text-[9px] tracking-widest text-muted-foreground block mb-0.5">
+            SYSTEM DIAGNOSIS
+          </span>
+          {brief.diagnosis}
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
 // ---- Main Component ----
 
 export default function Game() {
@@ -101,6 +202,7 @@ export default function Game() {
   const [currentEvent, setCurrentEvent] = useState<GameEvent | null>(null);
   const [eventResolved, setEventResolved] = useState(false);
   const [historyView, setHistoryView] = useState<number | null>(null);
+  const [briefDismissed, setBriefDismissed] = useState(false);
   const logRef = useRef<HTMLDivElement>(null);
 
   // ---- Session bootstrap ----
@@ -229,6 +331,16 @@ export default function Game() {
 
   const isHistoryMode = historyView !== null;
   const postMortem = gameState.status === "lost" ? generatePostMortem(gameState) : [];
+  const dailyBrief = gameState.status === "playing" ? generateDailyBrief(gameState) : null;
+
+  // Reset brief dismiss when the day number changes (new turn)
+  const prevDayRef = useRef(gameState.day);
+  useEffect(() => {
+    if (gameState.day !== prevDayRef.current) {
+      prevDayRef.current = gameState.day;
+      setBriefDismissed(false);
+    }
+  }, [gameState.day]);
 
   const shareRun = () => {
     const encoded = btoa(JSON.stringify(gameState));
@@ -420,6 +532,11 @@ export default function Game() {
 
         {/* ---- COL 2: Event + Registry ---- */}
         <div className="space-y-5">
+          {/* Daily Brief */}
+          {dailyBrief && !briefDismissed && !isHistoryMode && (
+            <DailyBrief brief={dailyBrief} onDismiss={() => setBriefDismissed(true)} />
+          )}
+
           {/* Event card */}
           <Card
             className={`border-2 ${

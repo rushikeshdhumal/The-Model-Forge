@@ -573,6 +573,109 @@ export function getEventForDay(state: GameState): GameEvent | null {
   return pool[d % pool.length];
 }
 
+// ---- Daily Brief ----
+
+export type DailyBriefData = {
+  day: number;
+  deltas: { name: string; delta: number; current: number; isInverse?: boolean }[];
+  lastDecision: string | null;
+  lastEventTitle: string | null;
+  diagnosis: string;
+  severity: "nominal" | "warning" | "critical";
+};
+
+export function generateDailyBrief(state: GameState): DailyBriefData | null {
+  if (state.history.length === 0) return null;
+  const prev = state.history[state.history.length - 1] as GameState;
+
+  const deltas: DailyBriefData["deltas"] = [
+    {
+      name: "PRECISION",
+      delta: state.metrics.precision - prev.metrics.precision,
+      current: state.metrics.precision,
+    },
+    {
+      name: "RECALL",
+      delta: state.metrics.recall - prev.metrics.recall,
+      current: state.metrics.recall,
+    },
+    {
+      name: "SLA",
+      delta: state.metrics.slaAdherence - prev.metrics.slaAdherence,
+      current: state.metrics.slaAdherence,
+    },
+    {
+      name: "STALENESS",
+      delta: -(state.metrics.featureStaleness - prev.metrics.featureStaleness),
+      current: state.metrics.featureStaleness,
+      isInverse: true,
+    },
+    {
+      name: "COST IDX",
+      delta: -(state.metrics.inferenceCost - prev.metrics.inferenceCost),
+      current: state.metrics.inferenceCost,
+      isInverse: true,
+    },
+  ];
+
+  const lastLogEntry = [...state.eventLog]
+    .reverse()
+    .find((e) => e.choice);
+  const lastDecision = lastLogEntry?.choice ?? null;
+  const lastEventTitle = lastLogEntry
+    ? state.eventLog.find((e) => e.type === lastLogEntry.type && e.message === lastLogEntry.message)?.type ?? null
+    : null;
+
+  const m = state.metrics;
+  let diagnosis: string;
+  let severity: DailyBriefData["severity"] = "nominal";
+
+  const minAccuracy = Math.min(m.precision, m.recall);
+  const daysLeft = 14 - state.day + 1;
+
+  if (m.precision <= 20 || m.recall <= 20 || m.slaAdherence <= 20 || m.featureStaleness > 40) {
+    severity = "critical";
+    if (m.precision <= m.recall && m.precision <= m.slaAdherence) {
+      diagnosis = `CRITICAL: Precision at ${m.precision.toFixed(0)}% — ${daysLeft} days to survive. Emergency retrain or rollback needed immediately.`;
+    } else if (m.recall <= m.slaAdherence) {
+      diagnosis = `CRITICAL: Recall collapsed to ${m.recall.toFixed(0)}%. Model is missing most positive cases. Rollback strongly advised.`;
+    } else if (m.featureStaleness > 40) {
+      diagnosis = `CRITICAL: Feature staleness at ${m.featureStaleness.toFixed(0)}h — 8h from loss threshold. Enable Feature Store now.`;
+    } else {
+      diagnosis = `CRITICAL: SLA adherence at ${m.slaAdherence.toFixed(0)}%. Infrastructure is near collapse — scale or roll back immediately.`;
+    }
+  } else if (m.featureStaleness > 24) {
+    severity = "warning";
+    diagnosis = `WARNING: Feature staleness at ${m.featureStaleness.toFixed(0)}h (threshold: 48h). Enable Feature Store or force refresh this turn.`;
+  } else if (minAccuracy < 50) {
+    severity = "warning";
+    diagnosis = `WARNING: Model accuracy degrading (Precision ${m.precision.toFixed(0)}%, Recall ${m.recall.toFixed(0)}%). Consider retraining or promoting a staged candidate.`;
+  } else if (m.slaAdherence < 75) {
+    severity = "warning";
+    diagnosis = `WARNING: SLA at ${m.slaAdherence.toFixed(0)}% — approaching breach territory. Address root cause before next peak traffic window.`;
+  } else if (m.inferenceCost > 65) {
+    severity = "warning";
+    diagnosis = `WARNING: Inference cost index at ${m.inferenceCost.toFixed(0)}/100. Unchecked scaling will exhaust budget before Day 14.`;
+  } else if (m.skew === "High") {
+    severity = "warning";
+    diagnosis = "WARNING: Training-serving skew is HIGH. Feature distributions have diverged from your training baseline — model predictions are unreliable.";
+  } else if (deltas.every((d) => d.delta >= -0.6)) {
+    diagnosis = `Systems nominal. All metrics within safe operating range. ${daysLeft} day${daysLeft !== 1 ? "s" : ""} remaining — maintain current trajectory.`;
+  } else {
+    const worst = [...deltas].sort((a, b) => a.delta - b.delta)[0];
+    diagnosis = `Passive decay nominal. Watch ${worst.name} — down ${Math.abs(worst.delta).toFixed(1)} this cycle. Intervene if trend continues.`;
+  }
+
+  return {
+    day: state.day,
+    deltas,
+    lastDecision,
+    lastEventTitle,
+    diagnosis,
+    severity,
+  };
+}
+
 export function generatePostMortem(state: GameState): string[] {
   const bullets: string[] = [];
   if (!state.featureStore.enabled) {
