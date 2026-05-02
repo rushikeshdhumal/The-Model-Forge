@@ -1,0 +1,192 @@
+## Project: The Model Forge
+
+Build a complete, interactive web application that teaches production Machine Learning through a turn-based simulator. Host on Replit with Replit DB for persistent cross-device progress.
+
+### Tech Stack
+- **Frontend:** HTML, CSS, vanilla JavaScript (no frameworks)
+- **Backend:** Flask (Python) with Replit DB
+- **Database:** Replit DB (key-value store, keyed by anonymous session ID)
+
+### Core Concept
+**"The Model Forge"** – A turn-based web app where users play as an ML engineer managing a machine learning model in production (use cases vary by scenario: fraud, recommendations, churn, forecasting, etc.). Each "day" (turn) presents realistic events with choices that affect metrics, model registry, and infrastructure. Goal: survive 14 days without any metric hitting zero.
+
+### Required Features (6 Production ML Pillars)
+1. **Data Versioning & Lineage** – Track which data version trained each model
+2. **Feature Store** – Centralized, versioned features with staleness tracking
+3. **Model Registry** – Staging/production/archived models, rollback capability
+4. **CI/CD for ML** – Auto-retraining toggle, test pass rate
+5. **Model Monitoring** – Drift detection, latency, throughput alerts
+6. **Canary / Shadow Deployments** – Safe rollout, compare models
+
+### Metrics (6 bars, 0-100)
+- **Precision** – Model's positive predictive value
+- **Recall** – Model's sensitivity (depends on scenario: fraud detection, churn prediction, etc.)
+- **Feature Staleness** – Hours since latest feature update (inverse: lower is better)
+- **Inference Cost** – $ per 1k predictions
+- **SLA Adherence** – % uptime / latency compliance
+- **Training-Serving Skew** – Warning light (Low/Medium/High)
+
+### Model Archetypes (4)
+| Type | Accuracy | Cost | Latency | Explainability |
+|------|----------|------|---------|----------------|
+| Linear (Logistic Regression) | 70% | $0.05 | 5ms | High |
+| XGBoost | 85% | $0.10 | 15ms | Medium |
+| Neural Network | 92% | $0.50 | 80ms | Low |
+| Ensemble | 95% | $1.00 | 150ms | Very Low |
+
+### Game State Structure (JavaScript)
+```javascript
+state = {
+  sessionId: auto-generated,
+  day: 1,
+  metrics: { precision: 85, recall: 80, featureStaleness: 2, inferenceCost: 10, slaAdherence: 99, skew: "Low" },
+  registry: {
+    models: [
+      { id: "model_v1", type: "XGBoost", version: "1.0", stage: "production", trainedOnDay: 0, dataVersion: "dataset_20250428" }
+    ],
+    productionModelId: "model_v1"
+  },
+  featureStore: { enabled: false, stalenessHours: 6, featureVersions: ["user_ltv_v1"] },
+  ciCd: { autoRetrain: false, testPassRate: 1.0 },
+  eventLog: [],      // history of events & choices
+  futureEffects: [], // delayed consequences
+  completedScenarios: [],  // which case studies finished
+  history: []         // snapshots for time travel
+}
+```
+
+### Backend Endpoints (Flask + Replit DB)
+- `GET /load_state?session_id={id}` – Returns saved state or default from `default_state.json` if no key exists
+- `POST /save_state` – Body: { session_id, state } – Stores to Replit DB with key `f"session_{session_id}"`
+- `GET /new_session` – Generates anonymous session ID
+
+### Default Scenario (No Case Selected)
+- Model: XGBoost, Precision 85%, Recall 80%, Staleness 2h, Cost $0.10, SLA 99%, Skew Low
+- No special events for first 2 days (tutorial period)
+
+### First-Time User Tutorial
+If day === 1 and eventLog.length === 0:
+Show modal with:
+- "Welcome to The Model Forge"
+- "Click NEXT DAY to advance time"
+- "Watch your metrics decline slowly"
+- "Respond to events with choices"
+- "Reach day 14 to win"
+
+### Frontend UI Components
+1. **Header** – Game title "THE MODEL FORGE", Day counter, Score (optional), Reset button, Scenario selector dropdown
+2. **Metrics Panel** – 6 bars with color coding (green >70%, yellow 30-70%, red <30%)
+3. **Model Registry Card** – Shows production model, staging model (if any), promote/rollback buttons (disabled except via events)
+4. **Feature Store Card** – Enabled toggle (Expert Mode), staleness display, refresh button
+5. **Monitoring Dashboard** – Line chart (Chart.js) showing last 7 days of Precision/Recall
+6. **Event Area** – Current problem description, 3 choice buttons
+7. **Log Panel** – Scrollable history of events and system messages
+8. **Expert Mode Toggle** – Reveals advanced controls (CI/CD toggle, feature store config, model archetype selector)
+
+### Progressive Disclosure (3 Levels)
+- **Intern** – Shows only metrics + basic choices (hide registry details)
+- **ML Engineer** – Shows registry, monitoring, feature store (read-only)
+- **MLOps Lead** – Full controls (canary, CI/CD, model swapping)
+
+Detect level based on user's wins or set manually via dropdown.
+
+### 5 Full Real-World Cases + 5 Remixes
+#### Case 1: Zillow (Overfitting)
+- Initial: Precision 99%, Recall 60% (overfit), Feature Staleness 1h
+- Event: "Model performs great offline but fails in production"
+- Choices: (A) Simplify to Linear model, (B) Add validation set + retrain, (C) Ignore → Recall drops 10%/day
+
+#### Case 2: Microsoft Tay (Data Poisoning)
+- Event: "Unusual training data being injected"
+- Choices: (A) Add data validation pipeline, (B) Rollback to previous model, (C) Do nothing → Skew becomes High
+
+#### Case 3: Amazon Bias
+- Event: "Bias detected in predictions against protected group"
+- Choices: (A) Switch to Linear (explainable), (B) Add fairness constraint to feature store, (C) Ignore → Compliance audit fails
+
+#### Case 4: Uber Michelangelo (Latency Crisis)
+- Event: "Inference latency exceeding SLA (100ms) during peak"
+- Choices: (A) Fallback to XGBoost (lower accuracy), (B) Scale inference cluster (cost +50%), (C) Do nothing → SLA drops 20%
+
+#### Case 5: Netflix Prize (Drift)
+- Event: "Concept drift detected – user behavior changed"
+- Choices: (A) Enable auto-retraining (CI/CD), (B) Manual retrain with new data, (C) Ignore → Precision drops 5%/day
+
+**Remixes (rename only, reuse mechanics)**: Tesla (autopilot overfitting), Twitter (recommendation bias), Facebook (ad delivery latency), Google (search drift), Stripe (payment fraud model poisoning)
+
+### Simulation Rules
+- **Passive decay**: Each day, Precision -1, Recall -1, Feature Staleness +2 (if no action)
+- **Trigger checks**: If Precision < 60 → fire "low accuracy" event, if Staleness > 24h → fire "stale features" event
+- **Delayed effects**: Queue actions like "in 2 days, cost +50" → apply automatically
+- **Winning**: Survive 14 days → show victory screen
+- **Losing**: Any metric hits 0 → show blame report
+
+### Victory Screen
+On day 15 (after surviving 14 days):
+Show modal with:
+- "Production Ready! You survived 14 days"
+- Final metrics summary (all metrics displayed)
+- "Share your scenario" button (exports current state to URL hash)
+- "Play Again" button (resets game)
+
+### Post-Mortem Blame Report
+After loss, analyze eventLog and display:
+- "You had no Feature Store enabled → feature staleness killed your model"
+- "CI/CD was off → drift went undetected for 5 days"
+- "Model registry had no staging → you deployed a bad model directly"
+
+Each bullet links to a tooltip explaining the concept.
+
+### Reset Confirmation
+Reset button triggers modal: "Reset game? All progress will be lost." Confirm/Cancel options.
+
+### Time Travel Debugger (Bonus)
+- Add "⏪ Previous Day" and "⏩ Next Day" buttons
+- Store full state snapshot each turn in history array
+- When scrubbing, UI updates to show that day's metrics/registry
+- Does not affect current game (view-only)
+
+### Shareable Scenarios (URL encoding)
+- Button: "Copy shareable link" – serializes current scenario config to URL hash
+- On load, if `window.location.hash` contains base64 JSON, load that custom scenario
+
+### UI Styling
+- Dark theme (background #0a0f1e, cards #1e2a3a, neon green accents)
+- Responsive (stack on mobile, 3-column grid on desktop)
+- Font: monospace (SF Mono, Fira Code)
+- Browser tab title: `<title>The Model Forge | ML Production Simulator</title>`
+
+### Deployment Instructions
+- Run `python main.py` to start Flask server
+- Replit automatically provides public URL
+- Replit DB keys: `session_{session_id}` stores state JSON
+- No additional configuration needed
+
+### File Structure
+/
+├── main.py (Flask server with Replit DB endpoints)
+├── static/
+│   ├── index.html (main game UI)
+│   ├── style.css
+│   └── game.js (all frontend logic)
+├── default_state.json (initial game state)
+└── .replit (configure run command: python main.py)
+
+### Success Criteria (Self-Check Before Submitting)
+- Game loads, metrics update on "Next Day" click
+- First-time tutorial modal appears on fresh session
+- Events trigger when conditions met
+- Choices affect metrics immediately and sometimes delayed
+- Model registry shows at least 1 model; can't directly edit (only via events)
+- Expert Mode toggles extra controls
+- Replit DB saves/loads state correctly across browser refresh
+- At least 3 full real-world cases selectable via dropdown
+- Post-mortem appears after loss
+- Victory screen appears after day 14
+- Reset button shows confirmation modal
+- Game title "THE MODEL FORGE" appears prominently in header and browser tab
+- No console errors
+- Deployed and link submitted to Buildathon
+
+### Time Remaining: 15 hours
+Start with Flask server + Replit DB. Then frontend skeleton. Then event system. Then polish.

@@ -3,13 +3,15 @@ info:
   # Do not change the title, if the title changes, the import paths will be broken
   title: Api
   version: 0.1.0
-  description: API specification
+  description: The Model Forge API specification
 servers:
   - url: /api
     description: Base API path
 tags:
   - name: health
     description: Health operations
+  - name: session
+    description: Game session operations
 paths:
   /healthz:
     get:
@@ -24,6 +26,71 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+
+  /new-session:
+    get:
+      operationId: newSession
+      tags: [session]
+      summary: Generate a new anonymous session ID
+      responses:
+        "200":
+          description: New session ID
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NewSessionResponse"
+
+  /load-state:
+    get:
+      operationId: loadState
+      tags: [session]
+      summary: Load game state by session ID
+      parameters:
+        - name: session_id
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Game state (or default state if not found)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LoadStateResponse"
+
+  /save-state:
+    post:
+      operationId: saveState
+      tags: [session]
+      summary: Save game state
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SaveStateBody"
+      responses:
+        "200":
+          description: State saved successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SaveStateResponse"
+
+  /leaderboard:
+    get:
+      operationId: getLeaderboard
+      tags: [session]
+      summary: Get top completed game sessions for leaderboard
+      responses:
+        "200":
+          description: Top sessions
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LeaderboardResponse"
+
 components:
   schemas:
     HealthStatus:
@@ -34,3 +101,258 @@ components:
       required:
         - status
 
+    NewSessionResponse:
+      type: object
+      properties:
+        sessionId:
+          type: string
+      required:
+        - sessionId
+
+    LoadStateResponse:
+      type: object
+      properties:
+        state:
+          $ref: "#/components/schemas/GameState"
+        isDefault:
+          type: boolean
+      required:
+        - state
+        - isDefault
+
+    SaveStateBody:
+      type: object
+      properties:
+        sessionId:
+          type: string
+        state:
+          $ref: "#/components/schemas/GameState"
+      required:
+        - sessionId
+        - state
+
+    SaveStateResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+      required:
+        - success
+
+    LeaderboardEntry:
+      type: object
+      properties:
+        sessionId:
+          type: string
+        scenario:
+          type: string
+        day:
+          type: integer
+        precision:
+          type: number
+        recall:
+          type: number
+        slaAdherence:
+          type: number
+        completedAt:
+          type: string
+      required:
+        - sessionId
+        - scenario
+        - day
+        - precision
+        - recall
+        - slaAdherence
+        - completedAt
+
+    LeaderboardResponse:
+      type: object
+      properties:
+        entries:
+          type: array
+          items:
+            $ref: "#/components/schemas/LeaderboardEntry"
+      required:
+        - entries
+
+    GameState:
+      type: object
+      description: Full game state (stored as JSON blob)
+      properties:
+        sessionId:
+          type: string
+        scenario:
+          type: string
+        day:
+          type: integer
+        status:
+          type: string
+          enum: [playing, won, lost]
+        metrics:
+          $ref: "#/components/schemas/Metrics"
+        registry:
+          $ref: "#/components/schemas/ModelRegistry"
+        featureStore:
+          $ref: "#/components/schemas/FeatureStore"
+        ciCd:
+          $ref: "#/components/schemas/CiCd"
+        eventLog:
+          type: array
+          items:
+            $ref: "#/components/schemas/EventLogEntry"
+        futureEffects:
+          type: array
+          items:
+            $ref: "#/components/schemas/FutureEffect"
+        history:
+          type: array
+          items:
+            type: object
+        userLevel:
+          type: string
+          enum: [intern, engineer, mlops]
+        wins:
+          type: integer
+      required:
+        - sessionId
+        - scenario
+        - day
+        - status
+        - metrics
+        - registry
+        - featureStore
+        - ciCd
+        - eventLog
+        - futureEffects
+        - history
+        - userLevel
+        - wins
+
+    Metrics:
+      type: object
+      properties:
+        precision:
+          type: number
+        recall:
+          type: number
+        featureStaleness:
+          type: number
+        inferenceCost:
+          type: number
+        slaAdherence:
+          type: number
+        skew:
+          type: string
+          enum: [Low, Medium, High]
+      required:
+        - precision
+        - recall
+        - featureStaleness
+        - inferenceCost
+        - slaAdherence
+        - skew
+
+    ModelInfo:
+      type: object
+      properties:
+        id:
+          type: string
+        type:
+          type: string
+        version:
+          type: string
+        stage:
+          type: string
+          enum: [production, staging, archived]
+        trainedOnDay:
+          type: integer
+        dataVersion:
+          type: string
+        accuracy:
+          type: number
+        cost:
+          type: number
+        latency:
+          type: number
+        explainability:
+          type: string
+      required:
+        - id
+        - type
+        - version
+        - stage
+        - trainedOnDay
+        - dataVersion
+
+    ModelRegistry:
+      type: object
+      properties:
+        models:
+          type: array
+          items:
+            $ref: "#/components/schemas/ModelInfo"
+        productionModelId:
+          type: string
+      required:
+        - models
+        - productionModelId
+
+    FeatureStore:
+      type: object
+      properties:
+        enabled:
+          type: boolean
+        stalenessHours:
+          type: number
+        featureVersions:
+          type: array
+          items:
+            type: string
+      required:
+        - enabled
+        - stalenessHours
+        - featureVersions
+
+    CiCd:
+      type: object
+      properties:
+        autoRetrain:
+          type: boolean
+        testPassRate:
+          type: number
+      required:
+        - autoRetrain
+        - testPassRate
+
+    EventLogEntry:
+      type: object
+      properties:
+        day:
+          type: integer
+        type:
+          type: string
+        message:
+          type: string
+        choice:
+          type: string
+      required:
+        - day
+        - type
+        - message
+
+    FutureEffect:
+      type: object
+      properties:
+        triggerDay:
+          type: integer
+        metric:
+          type: string
+        delta:
+          type: number
+        message:
+          type: string
+      required:
+        - triggerDay
+        - metric
+        - delta
+        - message
