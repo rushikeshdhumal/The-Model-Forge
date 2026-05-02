@@ -11,6 +11,8 @@ import { GameState, DEFAULT_STATE } from "@/lib/game-types";
 import {
   GameEvent,
   DailyBriefData,
+  ScenarioBrief,
+  SCENARIO_BRIEFS,
   getEventForDay,
   applyChoiceAndAdvance,
   skipEventAndAdvance,
@@ -203,6 +205,7 @@ export default function Game() {
   const [eventResolved, setEventResolved] = useState(false);
   const [historyView, setHistoryView] = useState<number | null>(null);
   const [briefDismissed, setBriefDismissed] = useState(false);
+  const [scenarioBrief, setScenarioBrief] = useState<ScenarioBrief | null>(null);
   const logRef = useRef<HTMLDivElement>(null);
 
   // ---- Session bootstrap ----
@@ -296,12 +299,39 @@ export default function Game() {
     setShowReset(false);
   };
 
+  const buildScenarioState = (scenario: string): GameState => {
+    const base: GameState = { ...DEFAULT_STATE, sessionId: sessionId ?? "", scenario, wins: gameState.wins };
+    // Apply starting handicaps per scenario
+    switch (scenario) {
+      case "zillow":
+      case "tesla":
+        base.metrics = { ...base.metrics, recall: 75 };
+        break;
+      case "tay":
+      case "stripe":
+      case "amazon":
+      case "twitter":
+        base.metrics = { ...base.metrics, skew: "Medium" };
+        break;
+      case "uber":
+      case "facebook":
+        base.metrics = { ...base.metrics, slaAdherence: 91 };
+        break;
+      case "netflix":
+      case "google":
+        base.metrics = { ...base.metrics, precision: 78 };
+        break;
+    }
+    return base;
+  };
+
   const handleScenarioChange = (val: string) => {
-    const newState: GameState = { ...DEFAULT_STATE, sessionId: sessionId ?? "", scenario: val, wins: gameState.wins };
+    const newState = buildScenarioState(val);
     persistState(newState);
     setCurrentEvent(getEventForDay(newState));
     setEventResolved(false);
     setHistoryView(null);
+    setScenarioBrief(SCENARIO_BRIEFS[val] ?? null);
   };
 
   const handleLevelChange = (val: string) => {
@@ -866,6 +896,65 @@ export default function Game() {
               ACKNOWLEDGE AND BEGIN
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Scenario Briefing Modal */}
+      <Dialog open={!!scenarioBrief} onOpenChange={(open) => { if (!open) setScenarioBrief(null); }}>
+        <DialogContent className="bg-card border-primary/40 text-foreground font-mono max-w-lg rounded-none">
+          {scenarioBrief && (
+            <>
+              <DialogHeader>
+                <div className="flex items-center gap-3 mb-1">
+                  <span className="text-[10px] tracking-widest text-muted-foreground border border-border/40 px-2 py-0.5">
+                    {scenarioBrief.company.toUpperCase()} &middot; {scenarioBrief.year}
+                  </span>
+                </div>
+                <DialogTitle className="text-primary text-lg tracking-tight leading-snug">
+                  {scenarioBrief.title}
+                </DialogTitle>
+                <p className="text-xs text-muted-foreground italic mt-0.5">&ldquo;{scenarioBrief.tagline}&rdquo;</p>
+              </DialogHeader>
+
+              <div className="space-y-4 py-1">
+                {/* What happened */}
+                <div>
+                  <div className="text-[10px] tracking-widest text-muted-foreground mb-1.5">WHAT HAPPENED</div>
+                  <p className="text-sm leading-relaxed">{scenarioBrief.whatHappened}</p>
+                </div>
+
+                {/* Key risk */}
+                <div className="border border-yellow-400/30 bg-yellow-400/5 p-3">
+                  <div className="text-[10px] tracking-widest text-yellow-400 mb-1.5">KEY RISK IN YOUR RUN</div>
+                  <p className="text-sm leading-relaxed text-yellow-400/90">{scenarioBrief.keyRisk}</p>
+                </div>
+
+                {/* Lesson */}
+                <div className="border-l-2 border-primary/40 pl-3">
+                  <div className="text-[10px] tracking-widest text-muted-foreground mb-1.5">LESSON</div>
+                  <p className="text-xs leading-relaxed text-muted-foreground">{scenarioBrief.lesson}</p>
+                </div>
+
+                {/* Starting handicap */}
+                {scenarioBrief.startingHandicap && (
+                  <div className="bg-destructive/10 border border-destructive/30 p-2.5">
+                    <div className="text-[10px] tracking-widest text-destructive mb-1">STARTING HANDICAP</div>
+                    <p className="text-xs text-destructive/80">{scenarioBrief.startingHandicap}</p>
+                  </div>
+                )}
+              </div>
+
+              <DialogFooter>
+                <Button
+                  onClick={() => setScenarioBrief(null)}
+                  className="w-full font-bold tracking-widest"
+                  data-testid="button-start-scenario"
+                >
+                  ACCEPT MISSION
+                </Button>
+              </DialogFooter>
+            </>
+          )}
         </DialogContent>
       </Dialog>
 

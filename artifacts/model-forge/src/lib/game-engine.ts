@@ -573,6 +573,174 @@ export function getEventForDay(state: GameState): GameEvent | null {
   return pool[d % pool.length];
 }
 
+// ---- Scenario Briefs ----
+
+export type ScenarioBrief = {
+  id: string;
+  title: string;
+  company: string;
+  year: string;
+  tagline: string;
+  whatHappened: string;
+  keyRisk: string;
+  lesson: string;
+  startingHandicap?: string;
+};
+
+export const SCENARIO_BRIEFS: Record<string, ScenarioBrief> = {
+  default: {
+    id: "default",
+    company: "Generic Corp",
+    year: "2024",
+    title: "Standard Production Run",
+    tagline: "No inherited disasters — just your own.",
+    whatHappened:
+      "A clean slate. Your XGBoost model is freshly deployed with solid baseline metrics. There are no legacy skeletons in the closet — every failure from here is yours to own.",
+    keyRisk: "Passive metric decay and reactive incident management without proper MLOps infrastructure.",
+    lesson: "Even well-tuned models degrade. The systems around a model matter as much as the model itself.",
+  },
+  zillow: {
+    id: "zillow",
+    company: "Zillow",
+    year: "2021",
+    title: "Zillow Offers: The Overfitting Disaster",
+    tagline: "A model that aced the test. Failed the market.",
+    whatHappened:
+      "Zillow's iBuying algorithm trained on historical data predicted home prices with stunning accuracy in backtests — then lost $881M in Q3 2021 when market conditions shifted. The model was overfit to a stable market it would never see again.",
+    keyRisk:
+      "On Day 3, you'll see that your model's offline Precision looks great — but Recall in production is tanking. Overfitting detected.",
+    lesson:
+      "Offline accuracy is a lie if your validation set doesn't reflect production distribution. Always monitor live recall, not just train-set precision.",
+    startingHandicap: "Recall starts slightly lower (75%) — you inherit a model already showing signs of overfitting.",
+  },
+  tay: {
+    id: "tay",
+    company: "Microsoft",
+    year: "2016",
+    title: "Tay: Data Poisoning at Scale",
+    tagline: "The model learned. From the wrong teachers.",
+    whatHappened:
+      "Microsoft's Tay chatbot went live on Twitter and was poisoned within 16 hours. Users discovered that Tay learned from interactions, so they coordinated to feed it toxic content. The model had no data validation or input sanitization.",
+    keyRisk:
+      "On Day 2, your feature pipeline will show suspicious adversarial patterns. Act fast — ignoring it causes skew to escalate.",
+    lesson:
+      "Any model that learns from user input in production is a target. Data validation pipelines are not optional — they are critical safety infrastructure.",
+    startingHandicap: "Skew starts at Medium — your data pipeline already has suspect inputs flowing in.",
+  },
+  amazon: {
+    id: "amazon",
+    company: "Amazon",
+    year: "2018",
+    title: "Amazon Hiring Tool: Bias Encoded at Scale",
+    tagline: "The model learned from history. History was biased.",
+    whatHappened:
+      "Amazon's ML recruiting tool penalized résumés containing the word 'women's' and downgraded graduates of all-women's colleges. It had learned from 10 years of hiring decisions — which reflected historical gender imbalance in tech. The tool was quietly shelved after internal audits.",
+    keyRisk:
+      "On Day 4, a compliance audit will flag your model for protected-group prediction divergence. Suppressing the report has severe delayed consequences.",
+    lesson:
+      "Training data encodes societal bias. Without fairness constraints and auditable features, your model will perpetuate and scale discrimination.",
+    startingHandicap: "Skew starts at Medium — feature distributions already diverge across demographic groups.",
+  },
+  uber: {
+    id: "uber",
+    company: "Uber",
+    year: "2019",
+    title: "Uber Surge: The Latency Cliff",
+    tagline: "Milliseconds between working and not.",
+    whatHappened:
+      "Uber's real-time pricing model had a hard SLA of 100ms. During a city-wide event in Sydney, traffic spiked 4x. P99 latency hit 180ms, violating driver and rider SLAs. The fallback was a static surge multiplier — losing millions in dynamic pricing revenue.",
+    keyRisk:
+      "On Day 3, a 3x traffic spike will push your latency past the SLA threshold. You must choose between cost, accuracy, or uptime.",
+    lesson:
+      "Real-time ML systems need latency budgets, not just accuracy targets. Load testing and fallback strategies are engineering requirements.",
+    startingHandicap: "SLA Adherence starts at 92% — the system is already under mild background load pressure.",
+  },
+  netflix: {
+    id: "netflix",
+    company: "Netflix",
+    year: "2020",
+    title: "Netflix Recommendations: Concept Drift",
+    tagline: "The model knew what you liked. Before everything changed.",
+    whatHappened:
+      "During COVID-19 lockdowns, Netflix's recommendation model — trained on pre-pandemic behavior — started surfacing content completely misaligned with viewer mood. Binge patterns, genre preferences, and session lengths all shifted. The model took weeks to retrain because CI/CD wasn't set up for rapid iteration.",
+    keyRisk:
+      "On Day 5, your model will show signs of concept drift. Ignoring it schedules two future precision drops. Enabling auto-retrain is the fastest fix.",
+    lesson:
+      "Concept drift is not an edge case — it is the default state of any model serving a changing world. Continuous training pipelines are infrastructure, not a nice-to-have.",
+    startingHandicap: "Precision starts at 78% — the model is already slightly behind the current distribution.",
+  },
+  tesla: {
+    id: "tesla",
+    company: "Tesla",
+    year: "2022",
+    title: "Tesla Autopilot: Edge Case Collapse",
+    tagline: "99.9% accuracy. Not enough.",
+    whatHappened:
+      "Tesla's Autopilot computer vision model showed high average accuracy — but catastrophically failed on rare edge cases: stationary emergency vehicles, unusual road markings, and adversarial conditions. Overfitting to common highway scenarios made it brittle on the long tail.",
+    keyRisk:
+      "On Day 3, overfitting surfaces. Your Precision looks great offline — but Recall is quietly failing on rare-class predictions in production.",
+    lesson:
+      "Safety-critical systems cannot optimize only for average-case accuracy. Tail risk and rare events require specific evaluation sets and targeted constraints.",
+    startingHandicap: "Recall starts at 72% — the model is already underperforming on minority-class predictions.",
+  },
+  twitter: {
+    id: "twitter",
+    company: "Twitter / X",
+    year: "2023",
+    title: "Twitter Algorithmic Amplification Audit",
+    tagline: "Engagement was the metric. Outrage was the result.",
+    whatHappened:
+      "Twitter's ML-driven feed amplification optimized for engagement — and discovered it was systematically amplifying political outrage content, as it generated the most clicks. A 2023 internal audit flagged disparate political amplification across groups. The recommendation team faced a fundamental question: optimize for engagement, or fairness?",
+    keyRisk:
+      "On Day 4, a bias audit will flag prediction divergence across protected groups. You must choose between accuracy, explainability, and regulatory risk.",
+    lesson:
+      "Engagement metrics are a proxy for human attention — not wellbeing or fairness. Any model optimizing engagement at scale requires demographic fairness evaluation.",
+    startingHandicap: "Skew starts at Medium — amplification patterns already diverge across user segments.",
+  },
+  facebook: {
+    id: "facebook",
+    company: "Meta / Facebook",
+    year: "2021",
+    title: "Facebook Real-Time Inference: The Cascade",
+    tagline: "One service failed. Everything failed.",
+    whatHappened:
+      "Facebook's 2021 outage began with a BGP routing failure — but the ML serving infrastructure had no graceful degradation. Real-time ranking models couldn't fall back to simpler heuristics. Six hours of complete downtime followed because the inference cluster had no circuit breakers and the fallback model had never been tested in production.",
+    keyRisk:
+      "On Day 3, a traffic surge will stress your SLA. With no fallback model in staging, you have no safe rollback option when latency spikes.",
+    lesson:
+      "Every ML system needs a simpler, cheaper fallback that has been battle-tested. Circuit breakers and graceful degradation are as important as the main model.",
+    startingHandicap: "SLA Adherence starts at 90% — the infrastructure is already under mild stress from background load.",
+  },
+  google: {
+    id: "google",
+    company: "Google",
+    year: "2023",
+    title: "Google Search: The Silent Drift",
+    tagline: "The model kept improving. The world kept changing faster.",
+    whatHappened:
+      "Google's search ranking models — updated infrequently due to the cost of retraining — began showing concept drift after LLM-generated content flooded the web in 2023. Spam detection and quality signals trained on pre-LLM content distributions were no longer discriminative. Engineers scrambled to build continuous evaluation pipelines.",
+    keyRisk:
+      "On Day 5, concept drift is detected. Without CI/CD auto-retraining enabled, precision will drop over the following 4 days.",
+    lesson:
+      "Concept drift timelines compress when the input distribution can be artificially flooded. Continuous evaluation and rapid iteration pipelines are essential defensive infrastructure.",
+    startingHandicap: "Precision starts at 78% — your model is already slightly stale relative to current distribution.",
+  },
+  stripe: {
+    id: "stripe",
+    company: "Stripe",
+    year: "2022",
+    title: "Stripe Fraud Detection: Adversarial Poisoning",
+    tagline: "The attacker read the model's playbook.",
+    whatHappened:
+      "Stripe's fraud detection models faced a coordinated adversarial attack: fraud rings deliberately made small legitimate transactions to build up trust scores, then executed large fraudulent charges. The model's training data was retroactively found to contain this pattern — the model had effectively learned a poisoned distribution.",
+    keyRisk:
+      "On Day 2, your feature pipeline will show poisoning patterns. Quick action contains it — delayed response causes compounding skew that's hard to reverse.",
+    lesson:
+      "Fraud models are adversarial by nature. Treating training data as trusted is naive. Continuous anomaly detection on the training pipeline is as important as anomaly detection on predictions.",
+    startingHandicap: "Skew starts at Medium — adversarial transactions are already influencing your feature distribution.",
+  },
+};
+
 // ---- Daily Brief ----
 
 export type DailyBriefData = {
