@@ -587,7 +587,7 @@ export function getEventForDay(state: GameState): GameEvent | null {
           id: "B",
           label: "Scale inference cluster to 2x replicas (+100% infra cost)",
           effect: (s) => {
-            s.metrics.inferenceCost = Math.min(100, s.metrics.inferenceCost * 2 + 5);
+            s.metrics.inferenceCost = Math.min(100, s.metrics.inferenceCost * 2);
             s.metrics.slaAdherence += 15;
           },
         },
@@ -1420,7 +1420,15 @@ export function getEventForDay(state: GameState): GameEvent | null {
   // Multiplier 7 would only produce 2 distinct values mod 14 (gcd(7,14)=7) — never use it.
   const scenarioHash = [...sc].reduce((acc, ch) => acc + ch.charCodeAt(0), 0);
   const runSeed = (state.wins ?? 0) * 13;
-  return pool[(d * 3 + scenarioHash * 3 + runSeed) % pool.length];
+  const selectedIdx = (d * 3 + scenarioHash * 3 + runSeed) % pool.length;
+  const poolEvent = pool[selectedIdx];
+  // Uber's Day 3 signature event IS a traffic spike (4x, NN latency breach).
+  // Prevent rand_traffic_spike from also appearing as a pool event — two spikes in
+  // three days dilutes the signature moment and creates confusing narrative repetition.
+  if (sc === "uber" && poolEvent.id === "rand_traffic_spike") {
+    return pool[(selectedIdx + 1) % pool.length];
+  }
+  return poolEvent;
 }
 
 // ---- Scenario Briefs ----

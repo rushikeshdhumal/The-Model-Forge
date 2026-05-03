@@ -718,7 +718,7 @@ const CODEX_SCENARIO_DIFFICULTY = [
     difficulty: 3,
     problemType: "regression" as const,
     comingSoon: false,
-    tierRationale: "SLA Adherence starts at 92% — already under pressure — and the inherited Neural Network's P99 latency hits 180ms under the Day 3 4x traffic spike. Both valid responses carry lasting consequences: XGBoost fallback costs precision-8/recall-5, cluster scaling doubles inference cost. Either path leaves you managing the downstream trade-off through the remaining 11 days.",
+    tierRationale: "SLA Adherence starts at 92% — already under pressure — and the inherited Neural Network's P99 latency hits 180ms under the Day 3 4x traffic spike. Both valid responses carry lasting consequences: XGBoost fallback costs Demand Index−8 and Surge Coverage−5, cluster scaling doubles inference cost. Either path leaves you managing the downstream trade-off through the remaining 11 days.",
     startingDebt: [
       "SLA Adherence starts at 92% — not 100%. The Neural Network has already stressed the serving cluster under background load.",
       "Neural Network model: accurate but slow under load. Latency is the latent risk hiding behind good offline metrics.",
