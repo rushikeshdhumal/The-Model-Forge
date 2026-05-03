@@ -678,7 +678,7 @@ const CODEX_SCENARIO_DIFFICULTY = [
     difficulty: 2,
     problemType: "ranking" as const,
     comingSoon: false,
-    tierRationale: "Inherits a Neural Network (higher inference cost than XGBoost) with Engagement Rate at 78% — 2 below baseline. The ranking problem type gives both metrics independent decay paths. The Day 5 drift event has deferred consequences: ignoring it schedules two Diversity Score drops on Days 7 and 9 that arrive when you're mid-run with the least recovery margin.",
+    tierRationale: "Inherits a Neural Network (higher inference cost than XGBoost) with Engagement Rate at 78% — 2 below baseline. The ranking problem type gives both metrics independent decay paths. The Day 5 drift event has deferred consequences: ignoring it schedules an Engagement Rate drop on Day 7, then drops to both Engagement Rate and Diversity Score on Day 9 — arriving when you're mid-run with the least recovery margin.",
     startingDebt: [
       "Engagement Rate (precision) starts at 78% — 2 points below baseline.",
       "Neural Network inherited — higher baseline inference cost than XGBoost, less headroom before cost events push toward the 100-limit.",
@@ -686,7 +686,7 @@ const CODEX_SCENARIO_DIFFICULTY = [
     signatureEvent: {
       day: 5,
       name: "GRADUAL CONCEPT DRIFT — VIEWER BEHAVIOUR SHIFT",
-      insight: "COVID lockdown patterns made pre-pandemic training data stale. Choice A (enable CI/CD) counters drift immediately. Choice B (retrain on 30 days) lands +8 precision, +6 recall but with a 3-day delay. Choice C ignores the drift and schedules −8 Diversity Score on Day 7 and −7 on Day 9 — a stacking double collapse.",
+      insight: "COVID lockdown patterns made pre-pandemic training data stale. Choice A (enable CI/CD auto-retraining) counters drift continuously and gives +3 Engagement Rate immediately. Choice B (manual retrain on 14 days of lockdown data) gives +10 Engagement Rate immediately but costs −4 Diversity Score — lockdown data narrows taste clusters and amplifies the filter bubble. Choice C ignores the drift: schedules −5 Engagement Rate on Day 7, then −5 Engagement Rate and −5 Diversity Score on Day 9 — a stacking double collapse across both metrics.",
     },
     scoringTrap: "Diversity Score (recall) is the most at-risk metric. Players who focus on Engagement Rate and defer the drift event let the Day 7 and Day 9 penalties stack, often triggering the CRITICAL: COVERAGE COLLAPSED event mid-run with no cheap recovery left.",
   },
