@@ -422,6 +422,10 @@ export default function Game() {
   const [scenarioBrief, setScenarioBrief] = useState<ScenarioBrief | null>(null);
   const [showCodex, setShowCodex] = useState(false);
   const [codexSection, setCodexSection] = useState<"metrics" | "concepts" | "reference">("metrics");
+  const [showSave, setShowSave] = useState(false);
+  const [restoreInput, setRestoreInput] = useState("");
+  const [restoreError, setRestoreError] = useState("");
+  const [codeCopied, setCodeCopied] = useState(false);
   const logRef = useRef<HTMLDivElement>(null);
 
   // ---- Session bootstrap ----
@@ -653,6 +657,15 @@ export default function Game() {
                 <SelectItem value="mlops">MLOps Lead</SelectItem>
               </SelectContent>
             </Select>
+            <Button
+              variant="outline"
+              size="sm"
+              className="text-primary/70 border-primary/30 hover:bg-primary/10 hover:text-primary text-xs"
+              onClick={() => { setShowSave(true); setRestoreInput(""); setRestoreError(""); setCodeCopied(false); }}
+              data-testid="button-save"
+            >
+              SAVE
+            </Button>
             <Button
               variant="outline"
               size="sm"
@@ -1210,6 +1223,84 @@ export default function Game() {
               CONFIRM RESET
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Save / Restore dialog */}
+      <Dialog open={showSave} onOpenChange={setShowSave}>
+        <DialogContent className="bg-card border-primary/30 font-mono max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-primary tracking-widest text-sm">SAVE / RESTORE</DialogTitle>
+            <DialogDescription className="text-muted-foreground text-xs leading-relaxed">
+              Your run is auto-saved every turn. Use your save code to resume on any device or browser.
+            </DialogDescription>
+          </DialogHeader>
+
+          {/* Current save code */}
+          <div className="space-y-2">
+            <div className="text-[10px] tracking-widest text-muted-foreground">YOUR SAVE CODE</div>
+            <div className="flex items-center gap-2">
+              <code className="flex-1 bg-secondary/40 border border-border/40 px-3 py-2 text-xs text-primary break-all select-all">
+                {sessionId ?? "Generating…"}
+              </code>
+              <Button
+                size="sm"
+                variant="outline"
+                className="shrink-0 border-primary/40 text-primary hover:bg-primary/10 text-xs"
+                disabled={!sessionId}
+                onClick={() => {
+                  if (sessionId) {
+                    navigator.clipboard.writeText(sessionId).then(() => {
+                      setCodeCopied(true);
+                      setTimeout(() => setCodeCopied(false), 2000);
+                    });
+                  }
+                }}
+              >
+                {codeCopied ? "COPIED!" : "COPY"}
+              </Button>
+            </div>
+            <p className="text-[10px] text-muted-foreground">
+              Day {gameState.day}/14 · {gameState.scenario} · {gameState.status}
+            </p>
+          </div>
+
+          <div className="border-t border-border/40 pt-4 space-y-2">
+            <div className="text-[10px] tracking-widest text-muted-foreground">RESTORE FROM CODE</div>
+            <div className="flex gap-2">
+              <input
+                type="text"
+                placeholder="Paste your save code here…"
+                value={restoreInput}
+                onChange={(e) => { setRestoreInput(e.target.value); setRestoreError(""); }}
+                className="flex-1 bg-secondary/40 border border-border/40 px-3 py-2 text-xs text-foreground placeholder:text-muted-foreground/50 outline-none focus:border-primary/50"
+              />
+              <Button
+                size="sm"
+                variant="outline"
+                className="shrink-0 border-primary/40 text-primary hover:bg-primary/10 text-xs"
+                disabled={!restoreInput.trim()}
+                onClick={() => {
+                  const code = restoreInput.trim();
+                  const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+                  if (!uuidRegex.test(code)) {
+                    setRestoreError("Invalid code format. Save codes look like: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx");
+                    return;
+                  }
+                  localStorage.setItem("modelForge_sessionId", code);
+                  window.location.reload();
+                }}
+              >
+                LOAD
+              </Button>
+            </div>
+            {restoreError && (
+              <p className="text-[10px] text-destructive leading-relaxed">{restoreError}</p>
+            )}
+            <p className="text-[10px] text-muted-foreground">
+              Loading a save code will replace your current session. Make sure you've copied your current code first if you want to keep it.
+            </p>
+          </div>
         </DialogContent>
       </Dialog>
 
