@@ -119,6 +119,10 @@ export interface GameState {
   history: GameStateHistoryItem[];
   userLevel: GameStateUserLevel;
   wins: number;
+  streak?: number;
+  maxStreak?: number;
+  score?: number;
+  grade?: string;
 }
 
 export interface LoadStateResponse {
@@ -145,6 +149,9 @@ export interface LeaderboardEntry {
   recall: number;
   slaAdherence: number;
   completedAt: string;
+  score: number;
+  grade: string;
+  maxStreak: number;
 }
 
 export interface AuthBody {

@@ -24,6 +24,8 @@ import {
   getMetricLabels,
   getProblemType,
   getEventColor,
+  computeRunScore,
+  DIFFICULTY_BY_SCENARIO,
 } from "@/lib/game-engine";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -1084,6 +1086,9 @@ export default function Game() {
   const problemType = getProblemType(gameState.scenario);
   const postMortem = gameState.status === "lost" ? generatePostMortem(gameState) : [];
   const dailyBrief = gameState.status === "playing" ? generateDailyBrief(gameState) : null;
+  const runScore = gameState.status !== "playing" ? computeRunScore(gameState) : null;
+  const gradeColor = (g: string) =>
+    g === "S" ? "text-amber-400" : g === "A" ? "text-emerald-400" : g === "B" ? "text-blue-400" : g === "C" ? "text-yellow-400" : "text-destructive";
 
   // Reset brief dismiss when the day number changes (new turn)
   const prevDayRef = useRef(gameState.day);
@@ -1910,14 +1915,18 @@ export default function Game() {
       <Dialog open={showGameOver} onOpenChange={setShowGameOver}>
         <DialogContent className="bg-card border-primary/30 font-mono max-w-3xl w-full max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle className={`tracking-widest text-lg ${gameState.status === "won" ? "text-primary" : "text-destructive"}`}>
-              {gameState.status === "won" ? "✓ PRODUCTION SURVIVED" : "✗ SYSTEM FAILURE"}
+            <DialogTitle className={`tracking-widest text-lg flex items-center gap-3 ${gameState.status === "won" ? "text-primary" : "text-destructive"}`}>
+              <span>{gameState.status === "won" ? "✓ PRODUCTION SURVIVED" : "✗ SYSTEM FAILURE"}</span>
+              {runScore && (
+                <span className={`font-black text-3xl leading-none ${gradeColor(runScore.grade)}`}>{runScore.grade}</span>
+              )}
             </DialogTitle>
             <DialogDescription asChild>
               <div className="text-muted-foreground text-xs mt-1 space-x-3">
                 <span>Day {gameState.day - 1}/14</span>
                 <span>·</span>
                 <span className="capitalize">{gameState.scenario}</span>
+                {runScore && <><span>·</span><span className="font-mono font-bold">{runScore.score} pts</span></>}
                 {playerName && <><span>·</span><span className="text-primary/70">{playerName}</span></>}
               </div>
             </DialogDescription>
@@ -1953,6 +1962,43 @@ export default function Game() {
                 <div className="text-2xl font-bold text-orange-400">{gameState.maxStreak}</div>
               </div>
             )}
+
+            {/* Score breakdown */}
+            {runScore && (() => {
+              const difficulty = DIFFICULTY_BY_SCENARIO[gameState.scenario] ?? 1;
+              const diffBonus = ({ 1: 0, 2: 15, 3: 25 } as Record<number, number>)[difficulty] ?? 0;
+              const diffLabel = ({ 1: "BEGINNER ★☆☆", 2: "MODERATE ★★☆", 3: "HARD ★★★" } as Record<number, string>)[difficulty] ?? "";
+              const daysCompleted = Math.max(0, gameState.day - 1);
+              const m = gameState.metrics;
+              const avgMetric = (m.precision + m.recall + m.slaAdherence) / 3;
+              const breakdown = [
+                { label: "Metric Quality (avg prec/recall/SLA)", pts: (avgMetric / 100) * 40, of: 40 },
+                { label: `Max Streak (${gameState.maxStreak ?? 0} clean days)`, pts: Math.min((gameState.maxStreak ?? 0) / 14, 1) * 20, of: 20 },
+                { label: `Days Survived (${daysCompleted}/14)`, pts: Math.min(daysCompleted / 14, 1) * 20, of: 20 },
+                { label: "Win Bonus", pts: gameState.status === "won" ? 10 : 0, of: 10 },
+                { label: `Difficulty Bonus (${diffLabel})`, pts: diffBonus, of: 25 },
+              ];
+              return (
+                <div className="border border-border/40 bg-secondary/10 p-3">
+                  <div className="text-[10px] tracking-widest text-muted-foreground mb-2.5">SCORE BREAKDOWN</div>
+                  <div className="space-y-2">
+                    {breakdown.map(({ label, pts, of }) => (
+                      <div key={label} className="flex items-center gap-2 text-xs">
+                        <span className="flex-1 text-muted-foreground truncate">{label}</span>
+                        <div className="w-20 h-1 bg-border/40 rounded-full overflow-hidden shrink-0">
+                          <div className="h-full bg-primary/60 rounded-full" style={{ width: `${Math.round((pts / of) * 100)}%` }} />
+                        </div>
+                        <span className="font-mono text-foreground/80 w-10 text-right shrink-0">+{Math.round(pts)}/{of}</span>
+                      </div>
+                    ))}
+                    <div className="flex justify-between items-center pt-2 border-t border-border/30 text-xs font-bold">
+                      <span className="text-muted-foreground tracking-widest">TOTAL</span>
+                      <span className={gradeColor(runScore.grade)}>{runScore.score} pts — Grade {runScore.grade}</span>
+                    </div>
+                  </div>
+                </div>
+              );
+            })()}
 
             {/* Full run chart */}
             {fullRunChartData.length > 1 && (
@@ -2038,7 +2084,7 @@ export default function Game() {
           <DialogHeader>
             <DialogTitle className="text-primary tracking-widest text-sm">GLOBAL LEADERBOARD</DialogTitle>
             <DialogDescription className="text-muted-foreground text-xs">
-              Top 10 completed runs ranked by days survived, then cumulative wins.
+              Top 10 completed runs ranked by performance score — difficulty, metrics, streak, and win bonus combined.
               Sign in to claim your name on the board.
             </DialogDescription>
           </DialogHeader>
@@ -2051,12 +2097,12 @@ export default function Game() {
             ) : (
               <div className="space-y-0">
                 {/* Header row */}
-                <div className="grid grid-cols-[2rem_1fr_5rem_4rem_4rem_4rem_4rem] gap-2 text-[10px] tracking-widest text-muted-foreground border-b border-border/40 pb-2 mb-1">
+                <div className="grid grid-cols-[2rem_1fr_5rem_3rem_4rem_3.5rem_3.5rem] gap-2 text-[10px] tracking-widest text-muted-foreground border-b border-border/40 pb-2 mb-1">
                   <span>#</span>
                   <span>PLAYER</span>
                   <span>SCENARIO</span>
-                  <span className="text-right">DAY</span>
-                  <span className="text-right">WINS</span>
+                  <span className="text-center">GRD</span>
+                  <span className="text-right">SCORE</span>
                   <span className="text-right">PREC</span>
                   <span className="text-right">RECALL</span>
                 </div>
@@ -2070,7 +2116,7 @@ export default function Game() {
                   return (
                     <div
                       key={e.sessionId}
-                      className={`grid grid-cols-[2rem_1fr_5rem_4rem_4rem_4rem_4rem] gap-2 items-center py-2 text-xs border-b border-border/20 last:border-0 transition-colors ${
+                      className={`grid grid-cols-[2rem_1fr_5rem_3rem_4rem_3.5rem_3.5rem] gap-2 items-center py-2 text-xs border-b border-border/20 last:border-0 transition-colors ${
                         isYou ? "bg-primary/5 text-primary" : "text-foreground/80 hover:bg-secondary/20"
                       }`}
                     >
@@ -2090,10 +2136,8 @@ export default function Game() {
                         <div className="text-[10px] text-muted-foreground/50">{completedDate}</div>
                       </div>
                       <span className="text-[10px] text-muted-foreground capitalize truncate">{e.scenario}</span>
-                      <span className={`text-right font-bold ${e.day >= 14 ? "text-primary" : "text-foreground/60"}`}>
-                        {e.day}/14
-                      </span>
-                      <span className="text-right text-muted-foreground">{e.wins}</span>
+                      <span className={`text-center font-black text-sm ${gradeColor(e.grade)}`}>{e.grade}</span>
+                      <span className="text-right font-mono font-bold">{e.score}</span>
                       <span className="text-right">{e.precision.toFixed(1)}%</span>
                       <span className="text-right">{e.recall.toFixed(1)}%</span>
                     </div>

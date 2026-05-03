@@ -31,6 +31,8 @@ export interface GameState {
   wins: number;
   streak: number;
   maxStreak: number;
+  score?: number;
+  grade?: string;
 }
 
 export interface ModelInfo {

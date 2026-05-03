@@ -245,11 +245,14 @@ router.get("/leaderboard", async (req, res) => {
       .leftJoin(playersTable, eq(sessionsTable.sessionId, playersTable.sessionId))
       .where(eq(sessionsTable.status, "won"))
       .orderBy(desc(sessionsTable.day), desc(sessionsTable.wins))
-      .limit(10);
+      .limit(50);
 
-    const entries = rows.map((row) => {
+    const mapped = rows.map((row) => {
       const state = row.state as {
         metrics?: { precision?: number; recall?: number; slaAdherence?: number };
+        score?: number;
+        grade?: string;
+        maxStreak?: number;
       };
       return {
         sessionId: row.sessionId,
@@ -261,8 +264,15 @@ router.get("/leaderboard", async (req, res) => {
         recall: state?.metrics?.recall ?? 0,
         slaAdherence: state?.metrics?.slaAdherence ?? 0,
         completedAt: row.updatedAt.toISOString(),
+        score: state?.score ?? 0,
+        grade: state?.grade ?? "D",
+        maxStreak: state?.maxStreak ?? 0,
       };
     });
+
+    const entries = mapped
+      .sort((a, b) => b.score - a.score || b.precision - a.precision)
+      .slice(0, 10);
 
     const data = GetLeaderboardResponse.parse({ entries });
     res.json(data);

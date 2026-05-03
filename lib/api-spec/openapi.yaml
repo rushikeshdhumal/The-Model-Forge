@@ -211,6 +211,12 @@ components:
           type: number
         completedAt:
           type: string
+        score:
+          type: integer
+        grade:
+          type: string
+        maxStreak:
+          type: integer
       required:
         - sessionId
         - scenario
@@ -220,6 +226,9 @@ components:
         - recall
         - slaAdherence
         - completedAt
+        - score
+        - grade
+        - maxStreak
 
     AuthBody:
       type: object
@@ -309,6 +318,14 @@ components:
           enum: [intern, engineer, mlops]
         wins:
           type: integer
+        streak:
+          type: integer
+        maxStreak:
+          type: integer
+        score:
+          type: integer
+        grade:
+          type: string
       required:
         - sessionId
         - scenario

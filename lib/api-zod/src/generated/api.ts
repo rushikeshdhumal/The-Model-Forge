@@ -89,6 +89,10 @@ export const LoadStateResponse = zod.object({
       history: zod.array(zod.object({}).passthrough()),
       userLevel: zod.enum(["intern", "engineer", "mlops"]),
       wins: zod.number(),
+      streak: zod.number().optional(),
+      maxStreak: zod.number().optional(),
+      score: zod.number().optional(),
+      grade: zod.string().optional(),
     })
     .describe("Full game state (stored as JSON blob)"),
   isDefault: zod.boolean(),
@@ -158,6 +162,10 @@ export const SaveStateBody = zod.object({
       history: zod.array(zod.object({}).passthrough()),
       userLevel: zod.enum(["intern", "engineer", "mlops"]),
       wins: zod.number(),
+      streak: zod.number().optional(),
+      maxStreak: zod.number().optional(),
+      score: zod.number().optional(),
+      grade: zod.string().optional(),
     })
     .describe("Full game state (stored as JSON blob)"),
 });
@@ -233,6 +241,9 @@ export const GetLeaderboardResponse = zod.object({
       recall: zod.number(),
       slaAdherence: zod.number(),
       completedAt: zod.string(),
+      score: zod.number(),
+      grade: zod.string(),
+      maxStreak: zod.number(),
     }),
   ),
 });

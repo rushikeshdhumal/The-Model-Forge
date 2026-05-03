@@ -1,5 +1,31 @@
 import { GameState } from "./game-types";
 
+export const DIFFICULTY_BY_SCENARIO: Record<string, number> = {
+  default: 1, zillow: 2, netflix: 2, tesla: 2, google: 2,
+  uber: 3, facebook: 3, tay: 3, stripe: 3, amazon: 3, twitter: 3,
+};
+
+const DIFFICULTY_BONUS: Record<number, number> = { 1: 0, 2: 15, 3: 25 };
+
+export function computeRunScore(state: GameState): { score: number; grade: string } {
+  const difficulty = DIFFICULTY_BY_SCENARIO[state.scenario] ?? 1;
+  const bonus = DIFFICULTY_BONUS[difficulty] ?? 0;
+  const daysCompleted = Math.max(0, state.day - 1);
+  const m = state.metrics;
+  const avgMetric = (m.precision + m.recall + m.slaAdherence) / 3;
+  const metricPts = (avgMetric / 100) * 40;
+  const streakPts = Math.min((state.maxStreak ?? 0) / 14, 1) * 20;
+  const survivalPts = Math.min(daysCompleted / 14, 1) * 20;
+  const winPts = state.status === "won" ? 10 : 0;
+  const score = Math.round(metricPts + streakPts + survivalPts + winPts + bonus);
+  let grade = "D";
+  if (score >= 100) grade = "S";
+  else if (score >= 82) grade = "A";
+  else if (score >= 65) grade = "B";
+  else if (score >= 48) grade = "C";
+  return { score, grade };
+}
+
 export type Choice = {
   id: string;
   label: string;
@@ -92,12 +118,18 @@ function advanceDay(s: GameState): GameState {
     s.metrics.inferenceCost >= 100
   ) {
     s.status = "lost";
+    const { score, grade } = computeRunScore(s);
+    s.score = score;
+    s.grade = grade;
   }
 
   // Win condition
   if (s.day > 14 && s.status === "playing") {
     s.status = "won";
     s.wins += 1;
+    const { score, grade } = computeRunScore(s);
+    s.score = score;
+    s.grade = grade;
   }
 
   return s;
