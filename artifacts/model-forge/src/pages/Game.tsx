@@ -1440,7 +1440,7 @@ export default function Game() {
           </div>
 
           {/* How to play */}
-          <div className="grid grid-cols-3 gap-4 w-full">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 w-full">
             {[
               { step: "01", title: "An incident hits", desc: "Each day brings a new crisis affecting your model." },
               { step: "02", title: "Choose your response", desc: "Pick from real-world mitigation strategies." },
@@ -1609,14 +1609,73 @@ export default function Game() {
       <a href="#main-content" className="skip-link">Skip to main content</a>
 
       {/* Header */}
-      <header className="border-b border-border bg-card/50 px-4 md:px-8 py-4 sticky top-0 z-10 backdrop-blur-sm">
-        <div className="max-w-screen-xl mx-auto flex flex-col md:flex-row items-start md:items-center justify-between gap-3">
-          <div>
-            <h1 className="text-2xl md:text-3xl font-bold text-primary tracking-tighter leading-none">
-              THE MODEL FORGE<span className="animate-pulse ml-0.5" aria-hidden="true">_</span>
-            </h1>
-            <div className="flex items-center gap-2 mt-0.5">
-              <p className="text-xs text-muted-foreground tracking-widest">ML PRODUCTION SIMULATOR</p>
+      <header className="border-b border-border bg-card/50 px-4 md:px-8 py-3 md:py-4 sticky top-0 z-10 backdrop-blur-sm">
+        <div className="max-w-screen-xl mx-auto">
+
+          {/* ── MOBILE LAYOUT (hidden on md+) ── */}
+          <div className="md:hidden space-y-2">
+            {/* Row 1: Title + Day counter + theme */}
+            <div className="flex items-center justify-between gap-2">
+              <div>
+                <h1 className="text-lg font-bold text-primary tracking-tighter leading-none">
+                  THE MODEL FORGE<span className="animate-pulse ml-0.5" aria-hidden="true">_</span>
+                </h1>
+                <p className="text-[9px] text-muted-foreground tracking-widest">ML PRODUCTION SIMULATOR</p>
+              </div>
+              <div className="flex items-center gap-1.5 shrink-0">
+                <div data-testid="day-counter" className="text-sm font-bold border border-primary/40 px-2 py-0.5 text-primary">
+                  DAY {gameState.day}/14
+                </div>
+                {gameState.wins > 0 && (
+                  <Badge className="bg-primary/20 text-primary border-primary/40 text-[10px] px-1.5">
+                    {gameState.wins}W
+                  </Badge>
+                )}
+                {(gameState.streak ?? 0) >= 2 && (
+                  <Badge className="bg-orange-500/15 text-orange-400 border border-orange-500/35 font-mono text-[10px] px-1.5">
+                    🔥{gameState.streak}
+                  </Badge>
+                )}
+                <button
+                  onClick={toggleTheme}
+                  aria-label={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
+                  className="text-[11px] text-muted-foreground/70 border border-border/40 px-1.5 py-0.5 hover:border-primary/40 hover:text-primary transition-colors"
+                >
+                  {theme === "dark" ? "☀" : "◗"}
+                </button>
+              </div>
+            </div>
+
+            {/* Row 2: Scenario + Level selects */}
+            <div className="flex gap-2">
+              <Select value={gameState.scenario} onValueChange={handleScenarioChange}>
+                <SelectTrigger className="flex-1 text-xs h-8" data-testid="select-scenario">
+                  <SelectValue placeholder="Scenario" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="default">Default</SelectItem>
+                  <SelectItem value="zillow">Zillow (Overfitting)</SelectItem>
+                  <SelectItem value="amazon">Amazon (Bias)</SelectItem>
+                  <SelectItem value="uber">Uber (Latency)</SelectItem>
+                  <SelectItem value="netflix">Netflix (Drift)</SelectItem>
+                  <SelectItem value="google">Google (Drift)</SelectItem>
+                  <SelectItem value="stripe">Stripe (Poisoning)</SelectItem>
+                </SelectContent>
+              </Select>
+              <Select value={gameState.userLevel} onValueChange={handleLevelChange}>
+                <SelectTrigger className="flex-1 text-xs h-8" data-testid="select-level">
+                  <SelectValue placeholder="Level" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="intern">Intern</SelectItem>
+                  <SelectItem value="engineer">ML Engineer</SelectItem>
+                  <SelectItem value="mlops">MLOps Lead</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Row 3: Action buttons + player */}
+            <div className="flex items-center gap-1.5 flex-wrap">
               {playerName ? (
                 <button
                   onClick={() => { setAuthMode("login"); setAuthUsername(""); setAuthPassword(""); setAuthConfirm(""); setAuthError(""); setShowIdentity(true); }}
@@ -1633,96 +1692,90 @@ export default function Game() {
                   SIGN IN
                 </button>
               )}
+              <Button variant="outline" size="sm" className="text-primary/70 border-primary/30 hover:bg-primary/10 hover:text-primary text-[10px] h-6 px-2" onClick={() => setShowCodex(true)} data-testid="button-codex">CODEX</Button>
+              <Button variant="outline" size="sm" className="text-primary/70 border-primary/30 hover:bg-primary/10 hover:text-primary text-[10px] h-6 px-2" onClick={() => { setShowSave(true); setRestoreInput(""); setRestoreError(""); setCodeCopied(false); }} data-testid="button-save">SAVE</Button>
+              <Button variant="outline" size="sm" className="text-primary/70 border-primary/30 hover:bg-primary/10 hover:text-primary text-[10px] h-6 px-2" onClick={() => setShowLeaderboard(true)} data-testid="button-leaderboard">SCORES</Button>
+              <Button variant="outline" size="sm" className="text-destructive border-destructive/40 hover:bg-destructive/10 text-[10px] h-6 px-2" onClick={() => setShowReset(true)} data-testid="button-reset">RESET</Button>
             </div>
           </div>
-          <div className="flex flex-wrap items-center gap-2 md:gap-3">
-            <div
-              data-testid="day-counter"
-              className="text-xl font-bold border border-primary/40 px-3 py-1 text-primary"
-            >
-              DAY {gameState.day}/14
+
+          {/* ── DESKTOP LAYOUT (hidden below md) ── */}
+          <div className="hidden md:flex items-center justify-between gap-3">
+            <div>
+              <h1 className="text-2xl md:text-3xl font-bold text-primary tracking-tighter leading-none">
+                THE MODEL FORGE<span className="animate-pulse ml-0.5" aria-hidden="true">_</span>
+              </h1>
+              <div className="flex items-center gap-2 mt-0.5">
+                <p className="text-xs text-muted-foreground tracking-widest">ML PRODUCTION SIMULATOR</p>
+                {playerName ? (
+                  <button
+                    onClick={() => { setAuthMode("login"); setAuthUsername(""); setAuthPassword(""); setAuthConfirm(""); setAuthError(""); setShowIdentity(true); }}
+                    className="text-[10px] text-primary/70 border border-primary/25 px-1.5 py-0.5 tracking-widest hover:border-primary/50 hover:text-primary transition-colors"
+                    title="Switch account"
+                  >
+                    {playerName.toUpperCase()}
+                  </button>
+                ) : (
+                  <button
+                    onClick={() => { setAuthMode("login"); setAuthUsername(""); setAuthPassword(""); setAuthConfirm(""); setAuthError(""); setShowIdentity(true); }}
+                    className="text-[10px] text-muted-foreground/60 border border-border/30 px-1.5 py-0.5 tracking-widest hover:border-primary/40 hover:text-primary/70 transition-colors"
+                  >
+                    SIGN IN
+                  </button>
+                )}
+              </div>
             </div>
-            {gameState.wins > 0 && (
-              <Badge className="bg-primary/20 text-primary border-primary/40">
-                {gameState.wins} WIN{gameState.wins > 1 ? "S" : ""}
-              </Badge>
-            )}
-            {(gameState.streak ?? 0) >= 2 && (
-              <Badge
-                title={`${gameState.streak} consecutive clean days — all metrics in healthy range`}
-                className="bg-orange-500/15 text-orange-400 border border-orange-500/35 font-mono text-xs gap-1"
-              >
-                🔥 {gameState.streak}d streak
-              </Badge>
-            )}
-            <Select value={gameState.scenario} onValueChange={handleScenarioChange}>
-              <SelectTrigger className="w-[160px] text-xs" data-testid="select-scenario">
-                <SelectValue placeholder="Scenario" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="default">Default</SelectItem>
-                <SelectItem value="zillow">Zillow (Overfitting)</SelectItem>
-                <SelectItem value="amazon">Amazon (Bias)</SelectItem>
-                <SelectItem value="uber">Uber (Latency)</SelectItem>
-                <SelectItem value="netflix">Netflix (Drift)</SelectItem>
-                <SelectItem value="google">Google (Drift)</SelectItem>
-                <SelectItem value="stripe">Stripe (Poisoning)</SelectItem>
-              </SelectContent>
-            </Select>
-            <Select value={gameState.userLevel} onValueChange={handleLevelChange}>
-              <SelectTrigger className="w-[130px] text-xs" data-testid="select-level">
-                <SelectValue placeholder="Level" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="intern">Intern</SelectItem>
-                <SelectItem value="engineer">ML Engineer</SelectItem>
-                <SelectItem value="mlops">MLOps Lead</SelectItem>
-              </SelectContent>
-            </Select>
-            <Button
-              variant="outline"
-              size="sm"
-              className="text-primary/70 border-primary/30 hover:bg-primary/10 hover:text-primary text-xs"
-              onClick={() => { setShowSave(true); setRestoreInput(""); setRestoreError(""); setCodeCopied(false); }}
-              data-testid="button-save"
-            >
-              SAVE
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              className="text-primary/70 border-primary/30 hover:bg-primary/10 hover:text-primary text-xs"
-              onClick={() => setShowCodex(true)}
-              data-testid="button-codex"
-            >
-              CODEX
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              className="text-primary/70 border-primary/30 hover:bg-primary/10 hover:text-primary text-xs"
-              onClick={() => setShowLeaderboard(true)}
-              data-testid="button-leaderboard"
-            >
-              SCORES
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              className="text-destructive border-destructive/40 hover:bg-destructive/10 text-xs"
-              onClick={() => setShowReset(true)}
-              data-testid="button-reset"
-            >
-              RESET
-            </Button>
-            <button
-              onClick={toggleTheme}
-              aria-label={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
-              className="text-[11px] text-muted-foreground/70 border border-border/40 px-2 py-1 tracking-widest hover:border-primary/40 hover:text-primary transition-colors"
-            >
-              {theme === "dark" ? "☀" : "◗"}
-            </button>
+            <div className="flex flex-wrap items-center gap-2 md:gap-3">
+              <div data-testid="day-counter" className="text-xl font-bold border border-primary/40 px-3 py-1 text-primary">
+                DAY {gameState.day}/14
+              </div>
+              {gameState.wins > 0 && (
+                <Badge className="bg-primary/20 text-primary border-primary/40">
+                  {gameState.wins} WIN{gameState.wins > 1 ? "S" : ""}
+                </Badge>
+              )}
+              {(gameState.streak ?? 0) >= 2 && (
+                <Badge
+                  title={`${gameState.streak} consecutive clean days — all metrics in healthy range`}
+                  className="bg-orange-500/15 text-orange-400 border border-orange-500/35 font-mono text-xs gap-1"
+                >
+                  🔥 {gameState.streak}d streak
+                </Badge>
+              )}
+              <Select value={gameState.scenario} onValueChange={handleScenarioChange}>
+                <SelectTrigger className="w-[160px] text-xs" data-testid="select-scenario">
+                  <SelectValue placeholder="Scenario" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="default">Default</SelectItem>
+                  <SelectItem value="zillow">Zillow (Overfitting)</SelectItem>
+                  <SelectItem value="amazon">Amazon (Bias)</SelectItem>
+                  <SelectItem value="uber">Uber (Latency)</SelectItem>
+                  <SelectItem value="netflix">Netflix (Drift)</SelectItem>
+                  <SelectItem value="google">Google (Drift)</SelectItem>
+                  <SelectItem value="stripe">Stripe (Poisoning)</SelectItem>
+                </SelectContent>
+              </Select>
+              <Select value={gameState.userLevel} onValueChange={handleLevelChange}>
+                <SelectTrigger className="w-[130px] text-xs" data-testid="select-level">
+                  <SelectValue placeholder="Level" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="intern">Intern</SelectItem>
+                  <SelectItem value="engineer">ML Engineer</SelectItem>
+                  <SelectItem value="mlops">MLOps Lead</SelectItem>
+                </SelectContent>
+              </Select>
+              <Button variant="outline" size="sm" className="text-primary/70 border-primary/30 hover:bg-primary/10 hover:text-primary text-xs" onClick={() => { setShowSave(true); setRestoreInput(""); setRestoreError(""); setCodeCopied(false); }} data-testid="button-save">SAVE</Button>
+              <Button variant="outline" size="sm" className="text-primary/70 border-primary/30 hover:bg-primary/10 hover:text-primary text-xs" onClick={() => setShowCodex(true)} data-testid="button-codex">CODEX</Button>
+              <Button variant="outline" size="sm" className="text-primary/70 border-primary/30 hover:bg-primary/10 hover:text-primary text-xs" onClick={() => setShowLeaderboard(true)} data-testid="button-leaderboard">SCORES</Button>
+              <Button variant="outline" size="sm" className="text-destructive border-destructive/40 hover:bg-destructive/10 text-xs" onClick={() => setShowReset(true)} data-testid="button-reset">RESET</Button>
+              <button onClick={toggleTheme} aria-label={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"} className="text-[11px] text-muted-foreground/70 border border-border/40 px-2 py-1 tracking-widest hover:border-primary/40 hover:text-primary transition-colors">
+                {theme === "dark" ? "☀" : "◗"}
+              </button>
+            </div>
           </div>
+
         </div>
       </header>
 
@@ -2092,7 +2145,7 @@ export default function Game() {
               <CardTitle className="text-xs tracking-widest text-muted-foreground">EVENT LOG</CardTitle>
             </CardHeader>
             <CardContent className="p-0">
-              <div ref={logRef} className="h-52 overflow-y-auto px-4 pb-4 space-y-2 text-xs">
+              <div ref={logRef} className="h-40 sm:h-52 overflow-y-auto px-4 pb-4 space-y-2 text-xs">
                 {gameState.eventLog.length === 0 ? (
                   <div className="text-muted-foreground italic pt-2">No events logged yet.</div>
                 ) : (
@@ -2145,7 +2198,7 @@ export default function Game() {
 
       {/* Post-Game Results Modal */}
       <Dialog open={showGameOver} onOpenChange={setShowGameOver}>
-        <DialogContent className="bg-card border-primary/30 font-mono max-w-3xl w-full max-h-[90vh] overflow-y-auto">
+        <DialogContent className="bg-card border-primary/30 font-mono w-[95vw] sm:max-w-3xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className={`tracking-widest text-lg flex items-center gap-3 ${gameState.status === "won" ? "text-primary" : "text-destructive"}`}>
               <span>{gameState.status === "won" ? "✓ PRODUCTION SURVIVED" : "✗ SYSTEM FAILURE"}</span>
@@ -2220,7 +2273,7 @@ export default function Game() {
                     {breakdown.map(({ label, pts, of }) => (
                       <div key={label} className="flex items-center gap-2 text-xs">
                         <span className="flex-1 text-muted-foreground truncate">{label}</span>
-                        <div className="w-20 h-1 bg-border/40 rounded-full overflow-hidden shrink-0">
+                        <div className="w-12 sm:w-20 h-1 bg-border/40 rounded-full overflow-hidden shrink-0">
                           <div className="h-full bg-primary/60 rounded-full" style={{ width: `${Math.round((pts / of) * 100)}%` }} />
                         </div>
                         <span className="font-mono text-foreground/80 w-10 text-right shrink-0">+{Math.round(pts)}/{of}</span>
@@ -2396,7 +2449,8 @@ export default function Game() {
                 NO COMPLETED RUNS YET. BE THE FIRST TO SURVIVE ALL 14 DAYS.
               </div>
             ) : (
-              <div className="space-y-0">
+              <div className="overflow-x-auto -mx-1 px-1">
+              <div className="space-y-0 min-w-[480px]">
                 {/* Header row */}
                 <div className="grid grid-cols-[2rem_1fr_5rem_3rem_4rem_3.5rem_3.5rem] gap-2 text-[10px] tracking-widest text-muted-foreground border-b border-border/40 pb-2 mb-1">
                   <span>#</span>
@@ -2444,6 +2498,7 @@ export default function Game() {
                     </div>
                   );
                 })}
+              </div>
               </div>
             )}
 
@@ -2911,12 +2966,12 @@ export default function Game() {
             <p className="text-[10px] text-muted-foreground">
               Reference guide — metrics, concepts, and win/loss conditions
             </p>
-            <div className="flex gap-1 pt-2">
+            <div className="flex gap-1 pt-2 overflow-x-auto pb-0.5">
               {(["metrics", "concepts", "reference", "scenarios"] as const).map((tab) => (
                 <button
                   key={tab}
                   onClick={() => setCodexSection(tab)}
-                  className={`text-[10px] tracking-widest px-3 py-1 border transition-colors ${
+                  className={`text-[10px] tracking-widest px-2.5 py-1 border transition-colors shrink-0 ${
                     codexSection === tab
                       ? "border-primary/60 bg-primary/10 text-primary"
                       : "border-border/40 text-muted-foreground hover:text-foreground hover:border-border"
