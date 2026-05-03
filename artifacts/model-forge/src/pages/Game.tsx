@@ -447,7 +447,11 @@ export default function Game() {
   const [authError, setAuthError] = useState("");
   const [showLeaderboard, setShowLeaderboard] = useState(false);
   const [showScenarioPicker, setShowScenarioPicker] = useState(false);
-  const [showLanding, setShowLanding] = useState(true);
+  const [showLanding, setShowLanding] = useState(() => {
+    const skip = localStorage.getItem("modelForge_skipLanding");
+    if (skip) { localStorage.removeItem("modelForge_skipLanding"); return false; }
+    return true;
+  });
   const [showGameOver, setShowGameOver] = useState(false);
   const [gameOverCopied, setGameOverCopied] = useState(false);
   const logRef = useRef<HTMLDivElement>(null);
@@ -514,9 +518,11 @@ export default function Game() {
     localStorage.setItem("modelForge_sessionId", result.sessionId);
     setPlayerName(result.username);
     if (result.sessionId !== sessionId) {
+      localStorage.setItem("modelForge_skipLanding", "true");
       window.location.reload();
     } else {
       setShowIdentity(false);
+      setShowLanding(false);
     }
   };
 
@@ -697,7 +703,6 @@ export default function Game() {
   };
 
   const handleNewGame = () => {
-    setShowLanding(false);
     if (!isNewSession) {
       const reset: GameState = { ...DEFAULT_STATE, sessionId: sessionId ?? "", wins: gameState.wins };
       persistState(reset);
@@ -1748,6 +1753,7 @@ export default function Game() {
                   data-testid={`scenario-card-${id}`}
                   onClick={() => {
                     setShowScenarioPicker(false);
+                    setShowLanding(false);
                     // Apply scenario state
                     const newState = buildScenarioState(id);
                     persistState(newState);
