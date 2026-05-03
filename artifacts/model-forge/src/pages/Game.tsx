@@ -1426,13 +1426,9 @@ export default function Game() {
               <SelectContent>
                 <SelectItem value="default">Default</SelectItem>
                 <SelectItem value="zillow">Zillow (Overfitting)</SelectItem>
-                <SelectItem value="tay">Microsoft Tay (Poisoning)</SelectItem>
                 <SelectItem value="amazon">Amazon (Bias)</SelectItem>
                 <SelectItem value="uber">Uber (Latency)</SelectItem>
                 <SelectItem value="netflix">Netflix (Drift)</SelectItem>
-                <SelectItem value="tesla">Tesla (Overfitting)</SelectItem>
-                <SelectItem value="twitter">Twitter (Bias)</SelectItem>
-                <SelectItem value="facebook">Facebook (Latency)</SelectItem>
                 <SelectItem value="google">Google (Drift)</SelectItem>
                 <SelectItem value="stripe">Stripe (Poisoning)</SelectItem>
               </SelectContent>
@@ -2215,35 +2211,39 @@ export default function Game() {
 
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 mt-3">
             {([
-              { id: "default",   difficulty: 1, tag: "BEGINNER",  color: "text-primary border-primary/30"       },
-              { id: "zillow",    difficulty: 2, tag: "MODERATE",  color: "text-yellow-400 border-yellow-400/30" },
-              { id: "netflix",   difficulty: 2, tag: "MODERATE",  color: "text-yellow-400 border-yellow-400/30" },
-              { id: "tesla",     difficulty: 2, tag: "MODERATE",  color: "text-yellow-400 border-yellow-400/30" },
-              { id: "google",    difficulty: 2, tag: "MODERATE",  color: "text-yellow-400 border-yellow-400/30" },
-              { id: "uber",      difficulty: 3, tag: "HARD",      color: "text-destructive border-destructive/30" },
-              { id: "facebook",  difficulty: 3, tag: "HARD",      color: "text-destructive border-destructive/30" },
-              { id: "tay",       difficulty: 3, tag: "HARD",      color: "text-destructive border-destructive/30" },
-              { id: "stripe",    difficulty: 3, tag: "HARD",      color: "text-destructive border-destructive/30" },
-              { id: "amazon",    difficulty: 3, tag: "HARD",      color: "text-destructive border-destructive/30" },
-              { id: "twitter",   difficulty: 3, tag: "HARD",      color: "text-destructive border-destructive/30" },
-            ] as const).map(({ id, difficulty, tag, color }) => {
+              { id: "default",   difficulty: 1, tag: "BEGINNER",  color: "text-primary border-primary/30",          comingSoon: false },
+              { id: "zillow",    difficulty: 2, tag: "MODERATE",  color: "text-yellow-400 border-yellow-400/30",    comingSoon: false },
+              { id: "netflix",   difficulty: 2, tag: "MODERATE",  color: "text-yellow-400 border-yellow-400/30",    comingSoon: false },
+              { id: "tesla",     difficulty: 2, tag: "MODERATE",  color: "text-yellow-400 border-yellow-400/30",    comingSoon: true  },
+              { id: "google",    difficulty: 2, tag: "MODERATE",  color: "text-yellow-400 border-yellow-400/30",    comingSoon: false },
+              { id: "uber",      difficulty: 3, tag: "HARD",      color: "text-destructive border-destructive/30",  comingSoon: false },
+              { id: "facebook",  difficulty: 3, tag: "HARD",      color: "text-destructive border-destructive/30",  comingSoon: true  },
+              { id: "tay",       difficulty: 3, tag: "HARD",      color: "text-destructive border-destructive/30",  comingSoon: true  },
+              { id: "stripe",    difficulty: 3, tag: "HARD",      color: "text-destructive border-destructive/30",  comingSoon: false },
+              { id: "amazon",    difficulty: 3, tag: "HARD",      color: "text-destructive border-destructive/30",  comingSoon: false },
+              { id: "twitter",   difficulty: 3, tag: "HARD",      color: "text-destructive border-destructive/30",  comingSoon: true  },
+            ] as const).map(({ id, difficulty, tag, color, comingSoon }) => {
               const brief = SCENARIO_BRIEFS[id];
               if (!brief) return null;
               const stars = "★".repeat(difficulty) + "☆".repeat(3 - difficulty);
               return (
-                <button
+                <div
                   key={id}
                   data-testid={`scenario-card-${id}`}
-                  onClick={() => {
+                  title={comingSoon ? "Available in a future update." : undefined}
+                  className={`relative text-left border p-4 space-y-2.5 transition-all ${
+                    comingSoon
+                      ? "border-border/20 bg-card/10 opacity-50 grayscale-[30%] cursor-not-allowed select-none"
+                      : "group border-border/40 bg-card/20 hover:border-primary/40 hover:bg-primary/5 cursor-pointer focus:outline-none focus:border-primary/60"
+                  }`}
+                  onClick={comingSoon ? undefined : () => {
                     setShowScenarioPicker(false);
                     setShowLanding(false);
-                    // Apply scenario state
                     const newState = buildScenarioState(id);
                     persistState(newState);
                     setCurrentEvent(getEventForDay(newState));
                     setEventResolved(false);
                     setHistoryView(null);
-                    // Show scenario brief, then auth if needed
                     if (id !== "default") {
                       setScenarioBrief(brief);
                     } else if (!playerName) {
@@ -2252,20 +2252,25 @@ export default function Game() {
                       setShowIdentity(true);
                     }
                   }}
-                  className="group text-left border border-border/40 bg-card/20 hover:border-primary/40 hover:bg-primary/5 transition-all p-4 space-y-2.5 focus:outline-none focus:border-primary/60"
                 >
                   {/* Header row */}
                   <div className="flex items-start justify-between gap-2">
                     <span className="text-[10px] tracking-widest text-muted-foreground border border-border/40 px-1.5 py-0.5 shrink-0">
                       {brief.company.toUpperCase()} · {brief.year}
                     </span>
-                    <span className={`text-[10px] tracking-widest border px-1.5 py-0.5 shrink-0 ${color}`}>
-                      {tag}
-                    </span>
+                    {comingSoon ? (
+                      <span className="text-[10px] tracking-widest border border-border/40 text-muted-foreground px-1.5 py-0.5 shrink-0">
+                        COMING SOON
+                      </span>
+                    ) : (
+                      <span className={`text-[10px] tracking-widest border px-1.5 py-0.5 shrink-0 ${color}`}>
+                        {tag}
+                      </span>
+                    )}
                   </div>
 
                   {/* Title */}
-                  <div className="text-sm font-semibold text-foreground leading-snug group-hover:text-primary transition-colors">
+                  <div className={`text-sm font-semibold leading-snug transition-colors ${comingSoon ? "text-muted-foreground" : "text-foreground group-hover:text-primary"}`}>
                     {brief.title}
                   </div>
 
@@ -2276,19 +2281,19 @@ export default function Game() {
 
                   {/* Difficulty stars + problem type */}
                   <div className="flex items-center justify-between gap-2">
-                    <div className={`text-sm tracking-widest ${color.split(" ")[0]}`}>{stars}</div>
+                    <div className={`text-sm tracking-widest ${comingSoon ? "text-muted-foreground/50" : color.split(" ")[0]}`}>{stars}</div>
                     <span className="text-[9px] tracking-widest border border-border/40 text-muted-foreground px-1.5 py-0.5 shrink-0 uppercase">
                       {SCENARIO_BRIEFS[id]?.problemType ?? "classification"}
                     </span>
                   </div>
 
                   {/* Handicap */}
-                  {brief.startingHandicap && (
+                  {brief.startingHandicap && !comingSoon && (
                     <div className="border-l-2 border-destructive/40 pl-2 text-[10px] text-destructive/80 leading-relaxed">
                       {brief.startingHandicap}
                     </div>
                   )}
-                </button>
+                </div>
               );
             })}
           </div>
