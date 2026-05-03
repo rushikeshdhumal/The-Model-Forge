@@ -31,6 +31,8 @@ This repository is a pnpm monorepo with three main parts:
 - Sensitive leaderboard identifiers are not exposed
 - Request bodies are size-limited to reduce abuse
 
+See `docs/SECURITY.md` for the full security model.
+
 ## Database
 
 The app uses PostgreSQL with Drizzle.
@@ -41,6 +43,19 @@ Key tables:
 - **`sessions`** — saved game state and leaderboard data
 
 The database layer includes indexes for common access patterns such as leaderboard reads and username/session lookups.
+
+See `docs/DB.md` for schema details and query guidance.
+
+## Architecture and docs
+
+- `docs/ARCHITECTURE.md` — system layout, request flow, and data model
+- `docs/API.md` — API endpoints and request/response shapes
+- `docs/GAMEPLAY.md` — gameplay loop, scoring, and player guidance
+- `docs/SECURITY.md` — auth, recovery, and platform hardening
+- `docs/DEPLOYMENT.md` — environment variables, build, and deployment flow
+- `docs/OPERATIONS.md` — maintenance, incident response, and release checks
+- `docs/CONTRIBUTING.md` — contribution workflow and guidelines
+- `docs/DB.md` — database schema, indexes, and access patterns
 
 ## Monorepo structure
 
@@ -54,6 +69,7 @@ lib/
   api-spec/
   api-zod/
   db/
+docs/
 ```
 
 ## Development
