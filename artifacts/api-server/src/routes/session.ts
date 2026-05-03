@@ -130,10 +130,17 @@ router.post("/save-state", async (req, res) => {
   }
 });
 
+const USERNAME_PATTERN = /^[a-z0-9_-]+$/;
+
 router.post("/register", async (req, res) => {
   const body = RegisterPlayerBody.parse(req.body);
   const username = body.username.trim().toLowerCase();
   const { password } = body;
+
+  if (!USERNAME_PATTERN.test(username)) {
+    res.status(400).json({ error: "Username may only contain letters, numbers, _ and -.", code: "INVALID_USERNAME" });
+    return;
+  }
 
   try {
     // Check if username is already taken
