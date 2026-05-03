@@ -21,6 +21,9 @@ import {
   skipEventAndAdvance,
   generatePostMortem,
   generateDailyBrief,
+  getMetricLabels,
+  getProblemType,
+  getEventColor,
 } from "@/lib/game-engine";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -618,11 +621,12 @@ export default function Game() {
 
   const buildScenarioState = (scenario: string): GameState => {
     const base: GameState = { ...DEFAULT_STATE, sessionId: sessionId ?? "", scenario, wins: gameState.wins };
-    // Apply starting handicaps per scenario
     switch (scenario) {
       case "zillow":
-      case "tesla":
         base.metrics = { ...base.metrics, recall: 75 };
+        break;
+      case "tesla":
+        base.metrics = { ...base.metrics, recall: 72 };
         break;
       case "tay":
       case "stripe":
@@ -631,8 +635,18 @@ export default function Game() {
         base.metrics = { ...base.metrics, skew: "Medium" };
         break;
       case "uber":
+        base.metrics = { ...base.metrics, slaAdherence: 92 };
+        base.registry = {
+          ...base.registry,
+          models: [{ id: "model_v1", type: "Neural Network", version: "1.0", stage: "production", trainedOnDay: 0, dataVersion: "dataset_latest", accuracy: 88, cost: 0.18, latency: 25, explainability: "Low" }],
+        };
+        break;
       case "facebook":
-        base.metrics = { ...base.metrics, slaAdherence: 91 };
+        base.metrics = { ...base.metrics, slaAdherence: 90 };
+        base.registry = {
+          ...base.registry,
+          models: [{ id: "model_v1", type: "Neural Network", version: "1.0", stage: "production", trainedOnDay: 0, dataVersion: "dataset_latest", accuracy: 91, cost: 0.22, latency: 28, explainability: "Low" }],
+        };
         break;
       case "netflix":
       case "google":
@@ -677,6 +691,8 @@ export default function Game() {
       : gameState;
 
   const isHistoryMode = historyView !== null;
+  const metricLabels = getMetricLabels(gameState.scenario);
+  const problemType = getProblemType(gameState.scenario);
   const postMortem = gameState.status === "lost" ? generatePostMortem(gameState) : [];
   const dailyBrief = gameState.status === "playing" ? generateDailyBrief(gameState) : null;
 
@@ -1131,8 +1147,8 @@ export default function Game() {
               <CardTitle className="text-xs tracking-widest text-muted-foreground">SYSTEM METRICS</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
-              <MetricBar label="Precision" value={viewState.metrics.precision} />
-              <MetricBar label="Recall" value={viewState.metrics.recall} />
+              <MetricBar label={metricLabels.precision} value={viewState.metrics.precision} />
+              <MetricBar label={metricLabels.recall} value={viewState.metrics.recall} />
               <MetricBar label="SLA Adherence" value={viewState.metrics.slaAdherence} />
               <MetricBar
                 label="Feature Freshness"
@@ -1203,7 +1219,7 @@ export default function Game() {
               gameState.status !== "playing"
                 ? "border-destructive/50"
                 : currentEvent
-                ? "border-primary/60 shadow-[0_0_20px_rgba(57,255,20,0.08)]"
+                ? `${getEventColor(currentEvent.eventType)} shadow-[0_0_20px_rgba(57,255,20,0.08)]`
                 : "border-border/60"
             }`}
           >
@@ -1513,8 +1529,8 @@ export default function Game() {
             {/* Final metric row */}
             <div className="grid grid-cols-3 gap-3">
               {[
-                { label: "PRECISION", value: gameState.metrics.precision, good: gameState.metrics.precision >= 70 },
-                { label: "RECALL", value: gameState.metrics.recall, good: gameState.metrics.recall >= 70 },
+                { label: metricLabels.precision.toUpperCase(), value: gameState.metrics.precision, good: gameState.metrics.precision >= 70 },
+                { label: metricLabels.recall.toUpperCase(), value: gameState.metrics.recall, good: gameState.metrics.recall >= 70 },
                 { label: "SLA", value: gameState.metrics.slaAdherence, good: gameState.metrics.slaAdherence >= 90 },
               ].map((m) => (
                 <div key={m.label} className={`border p-3 text-center ${m.good ? "border-primary/30 bg-primary/5" : "border-destructive/30 bg-destructive/5"}`}>
@@ -1802,8 +1818,13 @@ export default function Game() {
                     &ldquo;{brief.tagline}&rdquo;
                   </div>
 
-                  {/* Difficulty stars */}
-                  <div className={`text-sm tracking-widest ${color.split(" ")[0]}`}>{stars}</div>
+                  {/* Difficulty stars + problem type */}
+                  <div className="flex items-center justify-between gap-2">
+                    <div className={`text-sm tracking-widest ${color.split(" ")[0]}`}>{stars}</div>
+                    <span className="text-[9px] tracking-widest border border-border/40 text-muted-foreground px-1.5 py-0.5 shrink-0 uppercase">
+                      {SCENARIO_BRIEFS[id]?.problemType ?? "classification"}
+                    </span>
+                  </div>
 
                   {/* Handicap */}
                   {brief.startingHandicap && (
@@ -1824,9 +1845,12 @@ export default function Game() {
           {scenarioBrief && (
             <>
               <DialogHeader>
-                <div className="flex items-center gap-3 mb-1">
+                <div className="flex items-center gap-2 mb-1 flex-wrap">
                   <span className="text-[10px] tracking-widest text-muted-foreground border border-border/40 px-2 py-0.5">
                     {scenarioBrief.company.toUpperCase()} &middot; {scenarioBrief.year}
+                  </span>
+                  <span className="text-[9px] tracking-widest border border-primary/30 text-primary/70 px-1.5 py-0.5 uppercase">
+                    {scenarioBrief.problemType}
                   </span>
                 </div>
                 <DialogTitle className="text-primary text-lg tracking-tight leading-snug">

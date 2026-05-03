@@ -8,6 +8,7 @@ export type Choice = {
 
 export type GameEvent = {
   id: string;
+  eventType?: "overfitting" | "poisoning" | "bias" | "latency" | "drift" | "triggered" | "random";
   title: string;
   description: string;
   choices: Choice[];
@@ -28,7 +29,6 @@ export function skipEventAndAdvance(state: GameState): GameState {
 }
 
 function advanceDay(s: GameState): GameState {
-  // Apply future effects triggering on this day
   const remaining: GameState["futureEffects"] = [];
   for (const effect of s.futureEffects) {
     if (effect.triggerDay === s.day) {
@@ -45,11 +45,9 @@ function advanceDay(s: GameState): GameState {
   }
   s.futureEffects = remaining;
 
-  // Save history snapshot
   s.history.push(JSON.parse(JSON.stringify(s)));
   if (s.history.length > 20) s.history = s.history.slice(-20);
 
-  // Advance day
   s.day += 1;
 
   // Passive decay
@@ -60,6 +58,8 @@ function advanceDay(s: GameState): GameState {
 
   if (s.ciCd.autoRetrain) {
     s.metrics.precision = Math.min(100, s.metrics.precision + 2);
+    // Retraining runs consume compute — reflected in cost index
+    s.metrics.inferenceCost = Math.min(100, s.metrics.inferenceCost + 2);
   }
 
   // Clamp
@@ -94,248 +94,58 @@ export function getEventForDay(state: GameState): GameEvent | null {
   const d = state.day;
   const sc = state.scenario;
 
-  if ((sc === "zillow" || sc === "tesla") && d === 3) {
-    return {
-      id: "overfitting",
-      title: "OVERFITTING DETECTED",
-      description:
-        "Model shows Precision 99% offline — but Recall has dropped to 60% in production. Classic overfitting to training distribution.",
-      choices: [
-        {
-          id: "A",
-          label: "Simplify to Linear Regression",
-          effect: (s) => {
-            s.metrics.precision -= 15;
-            s.metrics.recall += 20;
-            s.metrics.skew = "Low";
-            s.registry.models.push({
-              id: "model_v2",
-              type: "Linear",
-              version: "2.0",
-              stage: "production",
-              trainedOnDay: s.day,
-              dataVersion: "dataset_latest",
-              accuracy: 70,
-              cost: 0.05,
-              latency: 5,
-              explainability: "High",
-            });
-            s.registry.productionModelId = "model_v2";
-          },
-        },
-        {
-          id: "B",
-          label: "Add validation set + retrain XGBoost",
-          effect: (s) => {
-            s.metrics.precision -= 5;
-            s.metrics.recall += 15;
-            s.registry.models.push({
-              id: "model_v2",
-              type: "XGBoost",
-              version: "2.0",
-              stage: "staging",
-              trainedOnDay: s.day,
-              dataVersion: "dataset_latest",
-              accuracy: 85,
-              cost: 0.1,
-              latency: 15,
-              explainability: "Medium",
-            });
-          },
-        },
-        {
-          id: "C",
-          label: "Ignore it — metrics look fine",
-          effect: (s) => {
-            s.futureEffects.push({
-              triggerDay: s.day + 2,
-              metric: "recall",
-              delta: -10,
-              message: "Unaddressed overfitting caused Recall to degrade",
-            });
-          },
-        },
-      ],
-    };
-  }
+  // ---- Scenario-specific unique events ----
 
-  if ((sc === "tay" || sc === "stripe") && d === 2) {
+  // ZILLOW: Regression overfitting — backtest vs live error divergence
+  if (sc === "zillow" && d === 3) {
     return {
-      id: "poisoning",
-      title: "DATA POISONING SUSPECTED",
+      id: "zillow_overfit",
+      eventType: "overfitting",
+      title: "BACKTEST vs. LIVE ERROR DIVERGENCE",
       description:
-        "Suspicious patterns detected in incoming training data. Possible adversarial injection targeting your feature store.",
+        "Your model's offline validation error looked acceptable — but live prediction error is 5x higher. The model is overfit to stable historical market patterns that no longer hold in a volatile market.",
       choices: [
         {
           id: "A",
-          label: "Add data validation pipeline",
-          effect: (s) => {
-            s.metrics.skew = "Low";
-            s.featureStore.enabled = true;
-            s.metrics.featureStaleness = 1;
-          },
-        },
-        {
-          id: "B",
-          label: "Rollback to baseline model",
-          effect: (s) => {
-            s.metrics.recall -= 10;
-            s.metrics.precision -= 5;
-            s.metrics.skew = "Low";
-          },
-        },
-        {
-          id: "C",
-          label: "Monitor and wait",
-          effect: (s) => {
-            s.futureEffects.push({
-              triggerDay: s.day + 2,
-              metric: "skewLevel",
-              delta: 1,
-              message: "Data poisoning escalated — Skew now HIGH",
-            });
-          },
-        },
-      ],
-    };
-  }
-
-  if ((sc === "amazon" || sc === "twitter") && d === 4) {
-    return {
-      id: "bias",
-      title: "BIAS AUDIT FLAGGED",
-      description:
-        "Bias detected in predictions against a protected group — divergence of 18%. Compliance team is escalating to leadership.",
-      choices: [
-        {
-          id: "A",
-          label: "Switch to Linear (explainable)",
-          effect: (s) => {
-            s.metrics.precision -= 15;
-            s.metrics.recall += 5;
-            s.metrics.skew = "Low";
-            s.registry.models.push({
-              id: "model_v2",
-              type: "Linear",
-              version: "2.0",
-              stage: "staging",
-              trainedOnDay: s.day,
-              dataVersion: "dataset_latest",
-              accuracy: 70,
-              cost: 0.05,
-              latency: 5,
-              explainability: "High",
-            });
-          },
-        },
-        {
-          id: "B",
-          label: "Add fairness constraint to Feature Store",
-          effect: (s) => {
-            s.featureStore.enabled = true;
-            s.metrics.precision -= 3;
-            s.metrics.skew = "Low";
-          },
-        },
-        {
-          id: "C",
-          label: "Suppress the report",
-          effect: (s) => {
-            s.futureEffects.push({
-              triggerDay: s.day + 3,
-              metric: "slaAdherence",
-              delta: -25,
-              message: "Compliance audit failure — regulators intervened",
-            });
-          },
-        },
-      ],
-    };
-  }
-
-  if ((sc === "uber" || sc === "facebook") && d === 3) {
-    return {
-      id: "latency",
-      title: "LATENCY CRISIS",
-      description:
-        "P99 inference latency spiked to 180ms. SLA threshold is 100ms. Peak traffic window begins in 2 hours.",
-      choices: [
-        {
-          id: "A",
-          label: "Fallback to XGBoost (faster, lower accuracy)",
+          label: "Apply L2 regularization and retrain on recent market data",
           effect: (s) => {
             s.metrics.precision -= 8;
-            s.metrics.recall -= 5;
-            s.metrics.slaAdherence += 10;
-          },
-        },
-        {
-          id: "B",
-          label: "Scale inference cluster (+50% cost)",
-          effect: (s) => {
-            s.metrics.inferenceCost += 40;
-            s.metrics.slaAdherence += 15;
-          },
-        },
-        {
-          id: "C",
-          label: "Do nothing and hope",
-          effect: (s) => {
-            s.metrics.slaAdherence -= 20;
-            s.futureEffects.push({
-              triggerDay: s.day + 1,
-              metric: "slaAdherence",
-              delta: -15,
-              message: "Peak traffic overwhelmed the system",
-            });
-          },
-        },
-      ],
-    };
-  }
-
-  if ((sc === "netflix" || sc === "google") && d === 5) {
-    return {
-      id: "drift",
-      title: "CONCEPT DRIFT DETECTED",
-      description:
-        "User behavior shifted significantly post-event. Model trained on 6-month-old distribution is now stale.",
-      choices: [
-        {
-          id: "A",
-          label: "Enable CI/CD auto-retraining",
-          effect: (s) => {
-            s.ciCd.autoRetrain = true;
-            s.metrics.precision += 5;
-          },
-        },
-        {
-          id: "B",
-          label: "Manual retrain with fresh data",
-          effect: (s) => {
-            s.metrics.precision += 10;
-            s.metrics.recall += 8;
+            s.metrics.recall += 15;
+            s.metrics.skew = "Low";
             s.registry.models.push({
-              id: `model_v${s.day}`,
-              type: "XGBoost",
-              version: `${s.day}.0`,
+              id: "model_v2",
+              type: "Linear",
+              version: "2.0",
               stage: "staging",
               trainedOnDay: s.day,
-              dataVersion: "dataset_latest_v2",
-              accuracy: 87,
-              cost: 0.1,
-              latency: 15,
-              explainability: "Medium",
+              dataVersion: "dataset_regularized",
+              accuracy: 74,
+              cost: 0.05,
+              latency: 8,
+              explainability: "High",
+            });
+          },
+        },
+        {
+          id: "B",
+          label: "Collect 90 days of recent transaction data and schedule retrain",
+          effect: (s) => {
+            s.metrics.inferenceCost += 5;
+            s.futureEffects.push({
+              triggerDay: s.day + 2,
+              metric: "precision",
+              delta: 12,
+              message: "Fresh-data retrain corrected live error distribution",
             });
           },
         },
         {
           id: "C",
-          label: "Ignore the drift signal",
+          label: "Ignore — offline metrics show the model is fine",
           effect: (s) => {
             s.futureEffects.push(
-              { triggerDay: s.day + 2, metric: "precision", delta: -5, message: "Drift degraded Precision" },
-              { triggerDay: s.day + 4, metric: "precision", delta: -5, message: "Severe concept drift — Precision critically low" }
+              { triggerDay: s.day + 2, metric: "precision", delta: -10, message: "Overfitting to stable market caused live accuracy to collapse" },
+              { triggerDay: s.day + 3, metric: "recall", delta: -8, message: "Unaddressed overfitting — model fails on new market patterns" }
             );
           },
         },
@@ -343,10 +153,453 @@ export function getEventForDay(state: GameState): GameEvent | null {
     };
   }
 
-  // Triggered events (check after scenario)
+  // TESLA: Computer vision edge-case collapse
+  if (sc === "tesla" && d === 3) {
+    return {
+      id: "tesla_edge_case",
+      eventType: "overfitting",
+      title: "EDGE CASE COLLAPSE: RARE ROAD EVENTS",
+      description:
+        "Average-case accuracy is 99.1% — but the model catastrophically fails on stationary emergency vehicles and unusual road markings. Recall on rare-class events has silently degraded in production.",
+      choices: [
+        {
+          id: "A",
+          label: "Train on dedicated edge-case dataset with synthetic rare events",
+          effect: (s) => {
+            s.metrics.recall += 18;
+            s.metrics.inferenceCost += 8;
+            s.registry.models.push({
+              id: "model_v2",
+              type: "Ensemble",
+              version: "2.0",
+              stage: "staging",
+              trainedOnDay: s.day,
+              dataVersion: "dataset_edge_cases",
+              accuracy: 91,
+              cost: 0.18,
+              latency: 22,
+              explainability: "Medium",
+            });
+          },
+        },
+        {
+          id: "B",
+          label: "Ensemble with rule-based fallback for flagged rare-class inputs",
+          effect: (s) => {
+            s.metrics.recall += 10;
+            s.metrics.precision -= 3;
+          },
+        },
+        {
+          id: "C",
+          label: "Average accuracy is 99.1% — this is within acceptable safety range",
+          effect: (s) => {
+            s.futureEffects.push(
+              { triggerDay: s.day + 2, metric: "recall", delta: -15, message: "Rare-class failures escalated — edge cases now common in production" },
+              { triggerDay: s.day + 4, metric: "slaAdherence", delta: -12, message: "Regulators flagged safety-critical rare-class failures" }
+            );
+          },
+        },
+      ],
+    };
+  }
+
+  // TAY: Real-time online learning poisoning (generative model)
+  if (sc === "tay" && d === 2) {
+    return {
+      id: "tay_online_poisoning",
+      eventType: "poisoning",
+      title: "REAL-TIME ONLINE LEARNING POISONING",
+      description:
+        "Your model learns directly from live user inputs in real-time. Coordinated users are injecting adversarial content. Output coherence is degrading as toxic patterns are reinforced with each new incoming batch.",
+      choices: [
+        {
+          id: "A",
+          label: "Disable online learning — switch to hourly offline retrain cycle",
+          effect: (s) => {
+            s.metrics.precision += 5;
+            s.metrics.skew = "Low";
+            s.metrics.featureStaleness += 6;
+          },
+        },
+        {
+          id: "B",
+          label: "Add adversarial input filter and content validation layer",
+          effect: (s) => {
+            s.featureStore.enabled = true;
+            s.metrics.featureStaleness = 1;
+            s.metrics.skew = "Low";
+          },
+        },
+        {
+          id: "C",
+          label: "Rate-limit suspicious users and monitor for 24 hours",
+          effect: (s) => {
+            s.futureEffects.push(
+              { triggerDay: s.day + 2, metric: "skewLevel", delta: 1, message: "Online poisoning escalated — output skew now CRITICAL" },
+              { triggerDay: s.day + 3, metric: "precision", delta: -10, message: "Adversarial patterns now dominant in model outputs" }
+            );
+          },
+        },
+      ],
+    };
+  }
+
+  // STRIPE: Coordinated trust-score manipulation (fraud classification)
+  if (sc === "stripe" && d === 2) {
+    return {
+      id: "stripe_trust_poisoning",
+      eventType: "poisoning",
+      title: "COORDINATED TRUST-SCORE MANIPULATION",
+      description:
+        "Fraud rings made hundreds of small legitimate transactions to inflate trust scores before executing large fraudulent charges. Retroactive analysis shows training data encodes this pattern — your classifier learned a poisoned distribution.",
+      choices: [
+        {
+          id: "A",
+          label: "Deploy velocity anomaly detection on transaction sequences",
+          effect: (s) => {
+            s.featureStore.enabled = true;
+            s.metrics.featureStaleness = 1;
+            s.metrics.skew = "Low";
+            s.metrics.precision += 5;
+          },
+        },
+        {
+          id: "B",
+          label: "Add temporal consistency validation to the training pipeline",
+          effect: (s) => {
+            s.metrics.precision += 8;
+            s.metrics.skew = "Low";
+            s.metrics.inferenceCost += 3;
+          },
+        },
+        {
+          id: "C",
+          label: "Raise fraud detection threshold to flag more transactions",
+          effect: (s) => {
+            s.metrics.precision += 10;
+            s.metrics.recall -= 12;
+            s.futureEffects.push({
+              triggerDay: s.day + 3,
+              metric: "skewLevel",
+              delta: 1,
+              message: "Blunt threshold increase failed — sophisticated fraud rings adapted",
+            });
+          },
+        },
+      ],
+    };
+  }
+
+  // AMAZON: Demographic disparity in hiring scores (classification bias)
+  if (sc === "amazon" && d === 4) {
+    return {
+      id: "amazon_demographic_bias",
+      eventType: "bias",
+      title: "DEMOGRAPHIC DISPARITY IN MODEL SCORES",
+      description:
+        "Your model gives systematically lower scores to résumés containing women-associated terms. Disparate impact ratio is 0.61 — below the 0.8 legal threshold. The compliance team is escalating to executive leadership.",
+      choices: [
+        {
+          id: "A",
+          label: "Remove proxy demographic features from the training data",
+          effect: (s) => {
+            s.metrics.precision -= 8;
+            s.metrics.recall += 5;
+            s.metrics.skew = "Low";
+          },
+        },
+        {
+          id: "B",
+          label: "Reweight training labels to balance outcomes across demographic groups",
+          effect: (s) => {
+            s.metrics.precision -= 3;
+            s.metrics.skew = "Low";
+            s.metrics.inferenceCost += 5;
+          },
+        },
+        {
+          id: "C",
+          label: "Suppress the report — the model reflects historical hiring patterns",
+          effect: (s) => {
+            s.futureEffects.push({
+              triggerDay: s.day + 3,
+              metric: "slaAdherence",
+              delta: -28,
+              message: "Regulatory intervention — compliance audit forced model shutdown",
+            });
+          },
+        },
+      ],
+    };
+  }
+
+  // TWITTER: Political amplification disparity (ranking bias)
+  if (sc === "twitter" && d === 4) {
+    return {
+      id: "twitter_amplification_bias",
+      eventType: "bias",
+      title: "POLITICAL AMPLIFICATION DISPARITY AUDIT",
+      description:
+        "Internal audit reveals your engagement-optimized ranking algorithm amplifies one political group's content 18% more than another. Engagement is up — but the disparity is triggering regulatory inquiry and advertiser pullback.",
+      choices: [
+        {
+          id: "A",
+          label: "Add political diversity constraint to the ranking objective",
+          effect: (s) => {
+            s.metrics.precision -= 5;
+            s.metrics.recall += 3;
+            s.metrics.skew = "Low";
+          },
+        },
+        {
+          id: "B",
+          label: "Audit and reweight training data for political content balance",
+          effect: (s) => {
+            s.metrics.skew = "Low";
+            s.metrics.inferenceCost += 8;
+            s.futureEffects.push({
+              triggerDay: s.day + 2,
+              metric: "precision",
+              delta: 5,
+              message: "Rebalanced training data improved ranking fairness",
+            });
+          },
+        },
+        {
+          id: "C",
+          label: "Engagement is the objective — keep maximizing it",
+          effect: (s) => {
+            s.futureEffects.push(
+              { triggerDay: s.day + 2, metric: "skewLevel", delta: 1, message: "Amplification disparity widened — major advertisers pausing spend" },
+              { triggerDay: s.day + 3, metric: "slaAdherence", delta: -22, message: "Regulatory sanction imposed — enforcement action against platform" }
+            );
+          },
+        },
+      ],
+    };
+  }
+
+  // UBER: Neural Network inference latency crisis
+  if (sc === "uber" && d === 3) {
+    return {
+      id: "uber_latency_crisis",
+      eventType: "latency",
+      title: "INFERENCE LATENCY CRISIS: P99 = 180ms",
+      description:
+        "A city-wide event caused a 4x traffic spike. Your Neural Network's P99 inference latency hit 180ms — violating the 100ms SLA. Surge pricing predictions are delayed. Every second of latency costs dynamic pricing revenue.",
+      choices: [
+        {
+          id: "A",
+          label: "Fall back to XGBoost (35ms P99, slightly lower accuracy)",
+          effect: (s) => {
+            s.metrics.precision -= 8;
+            s.metrics.recall -= 5;
+            s.metrics.slaAdherence += 12;
+            s.registry.models.push({
+              id: "model_xgb_fallback",
+              type: "XGBoost",
+              version: "1.1",
+              stage: "production",
+              trainedOnDay: s.day,
+              dataVersion: "dataset_latest",
+              accuracy: 79,
+              cost: 0.06,
+              latency: 35,
+              explainability: "Medium",
+            });
+            s.registry.productionModelId = "model_xgb_fallback";
+          },
+        },
+        {
+          id: "B",
+          label: "Scale inference cluster to 2x replicas (+100% infra cost)",
+          effect: (s) => {
+            s.metrics.inferenceCost = Math.min(100, s.metrics.inferenceCost * 2 + 5);
+            s.metrics.slaAdherence += 15;
+          },
+        },
+        {
+          id: "C",
+          label: "Do nothing — traffic will drop after the event ends",
+          effect: (s) => {
+            s.metrics.slaAdherence -= 20;
+            s.futureEffects.push({
+              triggerDay: s.day + 1,
+              metric: "slaAdherence",
+              delta: -15,
+              message: "Peak traffic sustained — SLA violations compounded across the city",
+            });
+          },
+        },
+      ],
+    };
+  }
+
+  // FACEBOOK: BGP routing failure — no ML graceful degradation
+  if (sc === "facebook" && d === 3) {
+    return {
+      id: "facebook_cascade_failure",
+      eventType: "latency",
+      title: "BGP ROUTING FAILURE — INFERENCE UNREACHABLE",
+      description:
+        "A BGP misconfiguration has made your ML serving cluster unreachable. There is no pre-warmed fallback model in staging. Feed ranking and content recommendations have been offline for 47 minutes with no circuit breaker in place.",
+      choices: [
+        {
+          id: "A",
+          label: "Deploy lightweight rule-based heuristic fallback immediately",
+          effect: (s) => {
+            s.metrics.precision -= 15;
+            s.metrics.slaAdherence += 20;
+            s.registry.models.push({
+              id: "model_heuristic_fallback",
+              type: "Linear",
+              version: "0.1",
+              stage: "production",
+              trainedOnDay: 0,
+              dataVersion: "rules_v1",
+              accuracy: 60,
+              cost: 0.01,
+              latency: 5,
+              explainability: "High",
+            });
+            s.registry.productionModelId = "model_heuristic_fallback";
+          },
+        },
+        {
+          id: "B",
+          label: "Implement circuit breaker — serve cached predictions from last hour",
+          effect: (s) => {
+            s.metrics.slaAdherence += 12;
+            s.metrics.recall -= 8;
+          },
+        },
+        {
+          id: "C",
+          label: "Wait for BGP routing to self-heal — this is transient",
+          effect: (s) => {
+            s.metrics.slaAdherence -= 25;
+            s.futureEffects.push({
+              triggerDay: s.day + 1,
+              metric: "slaAdherence",
+              delta: -15,
+              message: "BGP failure persisted — six-hour total outage recorded",
+            });
+          },
+        },
+      ],
+    };
+  }
+
+  // NETFLIX: Gradual concept drift from COVID behavioral shift
+  if (sc === "netflix" && d === 5) {
+    return {
+      id: "netflix_gradual_drift",
+      eventType: "drift",
+      title: "GRADUAL CONCEPT DRIFT: VIEWING BEHAVIOR SHIFT",
+      description:
+        "COVID lockdowns shifted viewing patterns from short commute-hour sessions to multi-hour binge sessions. Recommendation signals trained on pre-lockdown behavior are misaligned. Viewer satisfaction scores are quietly declining.",
+      choices: [
+        {
+          id: "A",
+          label: "Enable CI/CD auto-retraining on a rolling 14-day engagement window",
+          effect: (s) => {
+            s.ciCd.autoRetrain = true;
+            s.metrics.precision += 3;
+          },
+        },
+        {
+          id: "B",
+          label: "Manual retrain with last 14 days of session and engagement data",
+          effect: (s) => {
+            s.metrics.precision += 10;
+            s.metrics.recall += 8;
+            s.registry.models.push({
+              id: `model_v${s.day}`,
+              type: "Neural Network",
+              version: `${s.day}.0`,
+              stage: "staging",
+              trainedOnDay: s.day,
+              dataVersion: "dataset_covid_behavior",
+              accuracy: 89,
+              cost: 0.18,
+              latency: 25,
+              explainability: "Low",
+            });
+          },
+        },
+        {
+          id: "C",
+          label: "Drift is small — viewing behavior will normalize on its own",
+          effect: (s) => {
+            s.futureEffects.push(
+              { triggerDay: s.day + 2, metric: "precision", delta: -5, message: "Gradual drift degraded recommendation ranking quality" },
+              { triggerDay: s.day + 4, metric: "precision", delta: -5, message: "Severe drift — recommendations rated poor by 30%+ of users" }
+            );
+          },
+        },
+      ],
+    };
+  }
+
+  // GOOGLE: Sudden LLM content flood — abrupt distribution shift
+  if (sc === "google" && d === 5) {
+    return {
+      id: "google_llm_flood",
+      eventType: "drift",
+      title: "LLM CONTENT FLOOD — QUALITY SIGNALS COLLAPSE",
+      description:
+        "Overnight, 40% of indexed web content is AI-generated. Your content quality classifiers — trained before LLMs existed — can no longer discriminate spam from genuine content. Quality signals that took years to build are now non-discriminative.",
+      choices: [
+        {
+          id: "A",
+          label: "Train dedicated LLM-content classifier and integrate into pipeline",
+          effect: (s) => {
+            s.metrics.precision += 12;
+            s.metrics.inferenceCost += 15;
+            s.registry.models.push({
+              id: `model_llm_detector_v${s.day}`,
+              type: "Neural Network",
+              version: `${s.day}.0`,
+              stage: "staging",
+              trainedOnDay: s.day,
+              dataVersion: "dataset_llm_content",
+              accuracy: 88,
+              cost: 0.22,
+              latency: 28,
+              explainability: "Low",
+            });
+          },
+        },
+        {
+          id: "B",
+          label: "Ensemble existing model with lightweight LLM-pattern detector",
+          effect: (s) => {
+            s.metrics.precision += 7;
+            s.metrics.recall += 5;
+            s.metrics.inferenceCost += 8;
+          },
+        },
+        {
+          id: "C",
+          label: "Keep existing pipeline — signal quality may improve naturally",
+          effect: (s) => {
+            s.futureEffects.push(
+              { triggerDay: s.day + 1, metric: "precision", delta: -8, message: "LLM content flood overwhelmed all quality signals" },
+              { triggerDay: s.day + 3, metric: "recall", delta: -8, message: "Spam recall collapsed — LLM content evades all existing filters" }
+            );
+          },
+        },
+      ],
+    };
+  }
+
+  // ---- Triggered events (universal — checked after scenario-specific events) ----
+
   if (state.metrics.precision < 60) {
     return {
       id: "low_accuracy",
+      eventType: "triggered",
       title: "CRITICAL: LOW PRECISION",
       description: "Precision has dropped below 60%. Users are receiving low-quality predictions in production.",
       choices: [
@@ -385,6 +638,7 @@ export function getEventForDay(state: GameState): GameEvent | null {
   if (state.metrics.featureStaleness > 24) {
     return {
       id: "stale_features",
+      eventType: "triggered",
       title: "CRITICAL: STALE FEATURES",
       description:
         "Feature staleness exceeds 24 hours. Training-serving skew is widening — model is operating on outdated inputs.",
@@ -420,6 +674,7 @@ export function getEventForDay(state: GameState): GameEvent | null {
   if (state.metrics.slaAdherence < 80) {
     return {
       id: "sla_breach",
+      eventType: "triggered",
       title: "SLA BREACH",
       description: "SLA adherence dropped below 80%. Multiple customers report degraded service. Escalations incoming.",
       choices: [
@@ -455,10 +710,11 @@ export function getEventForDay(state: GameState): GameEvent | null {
     };
   }
 
-  // Random daily events pool
+  // ---- Random daily events pool ----
   const pool: GameEvent[] = [
     {
       id: "rand_upstream_delay",
+      eventType: "random",
       title: "PIPELINE DELAY",
       description: "Upstream data pipeline delayed 3 hours due to infrastructure issues.",
       choices: [
@@ -469,6 +725,7 @@ export function getEventForDay(state: GameState): GameEvent | null {
     },
     {
       id: "rand_ab_test",
+      eventType: "random",
       title: "A/B TEST RESULTS",
       description: "Canary model showing 5% recall improvement on 10% of live traffic. Ready to promote?",
       choices: [
@@ -488,6 +745,7 @@ export function getEventForDay(state: GameState): GameEvent | null {
     },
     {
       id: "rand_new_dataset",
+      eventType: "random",
       title: "NEW DATASET AVAILABLE",
       description: "Dataset v2025Q2 is ready — 2x more training examples and fresher distribution.",
       choices: [
@@ -513,6 +771,7 @@ export function getEventForDay(state: GameState): GameEvent | null {
     },
     {
       id: "rand_gpu_interrupt",
+      eventType: "random",
       title: "GPU SPOT INSTANCE INTERRUPTED",
       description: "Batch inference job failed mid-run. Spot instance was reclaimed by cloud provider.",
       choices: [
@@ -523,6 +782,7 @@ export function getEventForDay(state: GameState): GameEvent | null {
     },
     {
       id: "rand_security",
+      eventType: "random",
       title: "SECURITY VULNERABILITY",
       description: "Critical CVE found in the model serving container. Patch requires brief restart.",
       choices: [
@@ -540,6 +800,7 @@ export function getEventForDay(state: GameState): GameEvent | null {
     },
     {
       id: "rand_traffic_spike",
+      eventType: "random",
       title: "TRAFFIC SPIKE: 3X VOLUME",
       description: "Unexpected 3x spike in inference requests. Infrastructure is under stress.",
       choices: [
@@ -550,6 +811,7 @@ export function getEventForDay(state: GameState): GameEvent | null {
     },
     {
       id: "rand_null_features",
+      eventType: "random",
       title: "NULL FEATURE SPIKE",
       description: "Monitor detected unusual spike in null feature values in the last inference batch.",
       choices: [
@@ -560,6 +822,7 @@ export function getEventForDay(state: GameState): GameEvent | null {
     },
     {
       id: "rand_explainability",
+      eventType: "random",
       title: "LEGAL EXPLAINABILITY REQUEST",
       description: "Legal team requires model explainability report for a pending audit within 48 hours.",
       choices: [
@@ -585,6 +848,8 @@ export type ScenarioBrief = {
   keyRisk: string;
   lesson: string;
   startingHandicap?: string;
+  problemType: "classification" | "regression" | "ranking" | "generative";
+  metricLabels: { precision: string; recall: string };
 };
 
 export const SCENARIO_BRIEFS: Record<string, ScenarioBrief> = {
@@ -595,9 +860,11 @@ export const SCENARIO_BRIEFS: Record<string, ScenarioBrief> = {
     title: "Standard Production Run",
     tagline: "No inherited disasters — just your own.",
     whatHappened:
-      "A clean slate. Your XGBoost model is freshly deployed with solid baseline metrics. There are no legacy skeletons in the closet — every failure from here is yours to own.",
+      "A clean slate. Your XGBoost classifier is freshly deployed with solid baseline metrics. There are no legacy skeletons in the closet — every failure from here is yours to own.",
     keyRisk: "Passive metric decay and reactive incident management without proper MLOps infrastructure.",
     lesson: "Even well-tuned models degrade. The systems around a model matter as much as the model itself.",
+    problemType: "classification",
+    metricLabels: { precision: "Precision", recall: "Recall" },
   },
   zillow: {
     id: "zillow",
@@ -606,26 +873,30 @@ export const SCENARIO_BRIEFS: Record<string, ScenarioBrief> = {
     title: "Zillow Offers: The Overfitting Disaster",
     tagline: "A model that aced the test. Failed the market.",
     whatHappened:
-      "Zillow's iBuying algorithm trained on historical data predicted home prices with stunning accuracy in backtests — then lost $881M in Q3 2021 when market conditions shifted. The model was overfit to a stable market it would never see again.",
+      "Zillow's iBuying algorithm predicted home prices with apparently high accuracy in backtests — then lost $881M in Q3 2021 when market conditions shifted. The regression model was overfit to a stable, low-volatility market it would never see again. Validation data didn't reflect the distribution the model would face in production.",
     keyRisk:
-      "On Day 3, you'll see that your model's offline Precision looks great — but Recall in production is tanking. Overfitting detected.",
+      "On Day 3, your live prediction error will be revealed as 5x worse than offline validation suggested. The model is overfit to historical market stability.",
     lesson:
-      "Offline accuracy is a lie if your validation set doesn't reflect production distribution. Always monitor live recall, not just train-set precision.",
-    startingHandicap: "Recall starts slightly lower (75%) — you inherit a model already showing signs of overfitting.",
+      "Offline accuracy metrics are unreliable if your validation set doesn't reflect production distribution. Always monitor live error, not just held-out test metrics.",
+    startingHandicap: "Coverage index starts at 75% — you inherit a model already showing signs of distribution mismatch on recent market data.",
+    problemType: "regression",
+    metricLabels: { precision: "Accuracy Index", recall: "Coverage Index" },
   },
   tay: {
     id: "tay",
     company: "Microsoft",
     year: "2016",
-    title: "Tay: Data Poisoning at Scale",
+    title: "Tay: Online Learning Poisoning",
     tagline: "The model learned. From the wrong teachers.",
     whatHappened:
-      "Microsoft's Tay chatbot went live on Twitter and was poisoned within 16 hours. Users discovered that Tay learned from interactions, so they coordinated to feed it toxic content. The model had no data validation or input sanitization.",
+      "Microsoft's Tay chatbot went live on Twitter and was poisoned within 16 hours. The model used real-time online learning — updating its parameters directly from incoming user messages. Users coordinated to feed it toxic content at scale. With no input validation or content filtering, the model reinforced adversarial patterns as if they were signal.",
     keyRisk:
-      "On Day 2, your feature pipeline will show suspicious adversarial patterns. Act fast — ignoring it causes skew to escalate.",
+      "On Day 2, your real-time learning pipeline will surface poisoning patterns. Disabling online learning or adding content validation stops the cascade. Waiting causes coherence to collapse.",
     lesson:
-      "Any model that learns from user input in production is a target. Data validation pipelines are not optional — they are critical safety infrastructure.",
-    startingHandicap: "Skew starts at Medium — your data pipeline already has suspect inputs flowing in.",
+      "Any model that updates from live user input in production is an adversarial target. Real-time online learning requires adversarial input validation as a prerequisite, not an afterthought.",
+    startingHandicap: "Output distribution skew starts at Medium — adversarial inputs are already influencing your model's pattern space.",
+    problemType: "generative",
+    metricLabels: { precision: "Coherence", recall: "Safety Score" },
   },
   amazon: {
     id: "amazon",
@@ -634,12 +905,14 @@ export const SCENARIO_BRIEFS: Record<string, ScenarioBrief> = {
     title: "Amazon Hiring Tool: Bias Encoded at Scale",
     tagline: "The model learned from history. History was biased.",
     whatHappened:
-      "Amazon's ML recruiting tool penalized résumés containing the word 'women's' and downgraded graduates of all-women's colleges. It had learned from 10 years of hiring decisions — which reflected historical gender imbalance in tech. The tool was quietly shelved after internal audits.",
+      "Amazon's ML recruiting tool penalized résumés containing the word 'women's' and downgraded graduates of all-women's colleges. It had learned from 10 years of historical hiring decisions that reflected gender imbalance in tech. Removing proxy features like college name didn't fully solve the problem — the bias was encoded in the training labels themselves.",
     keyRisk:
-      "On Day 4, a compliance audit will flag your model for protected-group prediction divergence. Suppressing the report has severe delayed consequences.",
+      "On Day 4, a compliance audit will flag disparate impact against a protected group. The correct fix is removing biased training features or reweighting labels — not switching model architectures. Suppressing the audit has severe delayed consequences.",
     lesson:
-      "Training data encodes societal bias. Without fairness constraints and auditable features, your model will perpetuate and scale discrimination.",
-    startingHandicap: "Skew starts at Medium — feature distributions already diverge across demographic groups.",
+      "Training data encodes societal bias. Fairness requires auditing and correcting training labels and features — not just swapping model architectures. Simpler models can be equally biased.",
+    startingHandicap: "Output distribution skew starts at Medium — feature distributions already diverge across demographic groups in the training data.",
+    problemType: "classification",
+    metricLabels: { precision: "Precision", recall: "Recall" },
   },
   uber: {
     id: "uber",
@@ -648,12 +921,14 @@ export const SCENARIO_BRIEFS: Record<string, ScenarioBrief> = {
     title: "Uber Surge: The Latency Cliff",
     tagline: "Milliseconds between working and not.",
     whatHappened:
-      "Uber's real-time pricing model had a hard SLA of 100ms. During a city-wide event in Sydney, traffic spiked 4x. P99 latency hit 180ms, violating driver and rider SLAs. The fallback was a static surge multiplier — losing millions in dynamic pricing revenue.",
+      "Uber's real-time surge pricing Neural Network had a hard SLA of 100ms. During a city-wide event in Sydney, traffic spiked 4x. P99 latency hit 180ms, violating driver and rider SLAs. The fallback was a static surge multiplier — losing millions in dynamic pricing revenue because no pre-warmed simpler model was ready.",
     keyRisk:
-      "On Day 3, a 3x traffic spike will push your latency past the SLA threshold. You must choose between cost, accuracy, or uptime.",
+      "On Day 3, a 4x traffic spike will push your Neural Network past the latency SLA. Falling back to XGBoost restores speed but costs accuracy; scaling the cluster doubles infra cost.",
     lesson:
-      "Real-time ML systems need latency budgets, not just accuracy targets. Load testing and fallback strategies are engineering requirements.",
-    startingHandicap: "SLA Adherence starts at 92% — the system is already under mild background load pressure.",
+      "Real-time ML systems need latency budgets, not just accuracy targets. Load testing, pre-warmed fallback models, and autoscaling are engineering requirements — not nice-to-haves.",
+    startingHandicap: "SLA Adherence starts at 92% — the system is already under mild background load pressure from city traffic patterns.",
+    problemType: "classification",
+    metricLabels: { precision: "Precision", recall: "Recall" },
   },
   netflix: {
     id: "netflix",
@@ -662,12 +937,14 @@ export const SCENARIO_BRIEFS: Record<string, ScenarioBrief> = {
     title: "Netflix Recommendations: Concept Drift",
     tagline: "The model knew what you liked. Before everything changed.",
     whatHappened:
-      "During COVID-19 lockdowns, Netflix's recommendation model — trained on pre-pandemic behavior — started surfacing content completely misaligned with viewer mood. Binge patterns, genre preferences, and session lengths all shifted. The model took weeks to retrain because CI/CD wasn't set up for rapid iteration.",
+      "During COVID-19 lockdowns, Netflix's recommendation model — trained on pre-pandemic behavior — started surfacing content misaligned with viewer mood. Binge patterns, genre preferences, and session lengths all shifted dramatically. The model took weeks to retrain because CI/CD wasn't set up for rapid iteration on the recommendation pipeline.",
     keyRisk:
-      "On Day 5, your model will show signs of concept drift. Ignoring it schedules two future precision drops. Enabling auto-retrain is the fastest fix.",
+      "On Day 5, gradual concept drift will surface as viewer behavior shifts. Ignoring it schedules two future ranking quality drops. Enabling auto-retraining is the fastest mitigation.",
     lesson:
-      "Concept drift is not an edge case — it is the default state of any model serving a changing world. Continuous training pipelines are infrastructure, not a nice-to-have.",
-    startingHandicap: "Precision starts at 78% — the model is already slightly behind the current distribution.",
+      "Concept drift is the default state of any model serving a changing world. Continuous training pipelines are infrastructure, not a nice-to-have.",
+    startingHandicap: "Ranking quality (NDCG index) starts at 78% — the model is already slightly behind the current user behavior distribution.",
+    problemType: "ranking",
+    metricLabels: { precision: "NDCG Index", recall: "MAP Index" },
   },
   tesla: {
     id: "tesla",
@@ -676,12 +953,14 @@ export const SCENARIO_BRIEFS: Record<string, ScenarioBrief> = {
     title: "Tesla Autopilot: Edge Case Collapse",
     tagline: "99.9% accuracy. Not enough.",
     whatHappened:
-      "Tesla's Autopilot computer vision model showed high average accuracy — but catastrophically failed on rare edge cases: stationary emergency vehicles, unusual road markings, and adversarial conditions. Overfitting to common highway scenarios made it brittle on the long tail.",
+      "Tesla's Autopilot computer vision model showed high average accuracy — but catastrophically failed on rare edge cases: stationary emergency vehicles, unusual road markings, and adversarial conditions. Optimizing for average-case mAP on common highway scenarios made the model brittle on the long tail of rare events that matter most for safety.",
     keyRisk:
-      "On Day 3, overfitting surfaces. Your Precision looks great offline — but Recall is quietly failing on rare-class predictions in production.",
+      "On Day 3, rare-class recall failures surface in production. The fix requires targeted training on synthetic edge-case data or a rule-based ensemble — not just retraining on more of the same distribution.",
     lesson:
-      "Safety-critical systems cannot optimize only for average-case accuracy. Tail risk and rare events require specific evaluation sets and targeted constraints.",
-    startingHandicap: "Recall starts at 72% — the model is already underperforming on minority-class predictions.",
+      "Safety-critical computer vision systems cannot optimize only for average-case accuracy. Tail risk and rare events require specific evaluation sets, dedicated training data, and targeted coverage constraints.",
+    startingHandicap: "Rare-class coverage index starts at 72% — the model is already underperforming on minority-class predictions in production.",
+    problemType: "regression",
+    metricLabels: { precision: "Accuracy Index", recall: "Coverage Index" },
   },
   twitter: {
     id: "twitter",
@@ -690,12 +969,14 @@ export const SCENARIO_BRIEFS: Record<string, ScenarioBrief> = {
     title: "Twitter Algorithmic Amplification Audit",
     tagline: "Engagement was the metric. Outrage was the result.",
     whatHappened:
-      "Twitter's ML-driven feed amplification optimized for engagement — and discovered it was systematically amplifying political outrage content, as it generated the most clicks. A 2023 internal audit flagged disparate political amplification across groups. The recommendation team faced a fundamental question: optimize for engagement, or fairness?",
+      "Twitter's ML-driven feed ranking optimized for engagement — and a 2023 internal audit found it was systematically amplifying one political group's content 18% more than another. The model had never been evaluated for political neutrality. Maximizing engagement as a proxy for user satisfaction produced unintended demographic amplification at scale.",
     keyRisk:
-      "On Day 4, a bias audit will flag prediction divergence across protected groups. You must choose between accuracy, explainability, and regulatory risk.",
+      "On Day 4, an amplification audit will flag political content disparity. The fix requires adding fairness constraints to the ranking objective or rebalancing training data — not just switching model architectures.",
     lesson:
-      "Engagement metrics are a proxy for human attention — not wellbeing or fairness. Any model optimizing engagement at scale requires demographic fairness evaluation.",
-    startingHandicap: "Skew starts at Medium — amplification patterns already diverge across user segments.",
+      "Engagement metrics are a proxy for attention — not fairness or wellbeing. Any ranking model optimizing engagement at scale requires demographic fairness evaluation as part of standard model review.",
+    startingHandicap: "Feed distribution skew starts at Medium — amplification patterns already diverge across user segments in the current ranking model.",
+    problemType: "ranking",
+    metricLabels: { precision: "NDCG Index", recall: "MAP Index" },
   },
   facebook: {
     id: "facebook",
@@ -704,12 +985,14 @@ export const SCENARIO_BRIEFS: Record<string, ScenarioBrief> = {
     title: "Facebook Real-Time Inference: The Cascade",
     tagline: "One service failed. Everything failed.",
     whatHappened:
-      "Facebook's 2021 outage began with a BGP routing failure — but the ML serving infrastructure had no graceful degradation. Real-time ranking models couldn't fall back to simpler heuristics. Six hours of complete downtime followed because the inference cluster had no circuit breakers and the fallback model had never been tested in production.",
+      "Facebook's 2021 outage began with a BGP routing misconfiguration that made the ML serving infrastructure unreachable. The real-time ranking models had no graceful degradation path — no pre-warmed fallback model in staging, no circuit breakers. Six hours of complete downtime followed because the system had never been tested without the main model.",
     keyRisk:
-      "On Day 3, a traffic surge will stress your SLA. With no fallback model in staging, you have no safe rollback option when latency spikes.",
+      "On Day 3, a BGP routing failure will take your serving cluster offline. With no fallback model in staging, you must choose between deploying an untested heuristic, serving cached predictions, or waiting — each with major SLA consequences.",
     lesson:
-      "Every ML system needs a simpler, cheaper fallback that has been battle-tested. Circuit breakers and graceful degradation are as important as the main model.",
-    startingHandicap: "SLA Adherence starts at 90% — the infrastructure is already under mild stress from background load.",
+      "Every ML system needs a simpler, cheaper fallback that has been battle-tested in production. Circuit breakers and graceful degradation are as important as the main model.",
+    startingHandicap: "SLA Adherence starts at 90% — the infrastructure is already under mild stress from background load on the serving cluster.",
+    problemType: "classification",
+    metricLabels: { precision: "Precision", recall: "Recall" },
   },
   google: {
     id: "google",
@@ -718,12 +1001,14 @@ export const SCENARIO_BRIEFS: Record<string, ScenarioBrief> = {
     title: "Google Search: The Silent Drift",
     tagline: "The model kept improving. The world kept changing faster.",
     whatHappened:
-      "Google's search ranking models — updated infrequently due to the cost of retraining — began showing concept drift after LLM-generated content flooded the web in 2023. Spam detection and quality signals trained on pre-LLM content distributions were no longer discriminative. Engineers scrambled to build continuous evaluation pipelines.",
+      "Google's search quality and spam detection models — trained on pre-LLM web content — began showing concept drift in 2023 when LLM-generated content flooded the web. Spam detection signals and content quality classifiers trained on human-written content distributions could no longer discriminate. Engineers scrambled to build continuous evaluation and rapid retraining pipelines.",
     keyRisk:
-      "On Day 5, concept drift is detected. Without CI/CD auto-retraining enabled, precision will drop over the following 4 days.",
+      "On Day 5, a sudden LLM content flood will collapse your quality signals. Unlike Netflix's gradual drift, this is a sudden, adversarially-induced distribution shift. Waiting compounds the damage significantly.",
     lesson:
-      "Concept drift timelines compress when the input distribution can be artificially flooded. Continuous evaluation and rapid iteration pipelines are essential defensive infrastructure.",
-    startingHandicap: "Precision starts at 78% — your model is already slightly stale relative to current distribution.",
+      "Concept drift timelines compress when the input distribution can be deliberately flooded. Continuous evaluation, rapid retraining pipelines, and ensemble-based adaptation are essential defensive infrastructure.",
+    startingHandicap: "Ranking quality (NDCG index) starts at 78% — your model is already slightly stale relative to the current web content distribution.",
+    problemType: "ranking",
+    metricLabels: { precision: "NDCG Index", recall: "MAP Index" },
   },
   stripe: {
     id: "stripe",
@@ -732,14 +1017,52 @@ export const SCENARIO_BRIEFS: Record<string, ScenarioBrief> = {
     title: "Stripe Fraud Detection: Adversarial Poisoning",
     tagline: "The attacker read the model's playbook.",
     whatHappened:
-      "Stripe's fraud detection models faced a coordinated adversarial attack: fraud rings deliberately made small legitimate transactions to build up trust scores, then executed large fraudulent charges. The model's training data was retroactively found to contain this pattern — the model had effectively learned a poisoned distribution.",
+      "Stripe's fraud detection classifier faced a coordinated adversarial attack: fraud rings deliberately made hundreds of small legitimate transactions to build up trust scores, then executed large fraudulent charges. The model's training data was retroactively found to encode this pattern — the classifier had learned from a poisoned distribution where high trust scores correlated with eventual fraud.",
     keyRisk:
-      "On Day 2, your feature pipeline will show poisoning patterns. Quick action contains it — delayed response causes compounding skew that's hard to reverse.",
+      "On Day 2, your fraud detection pipeline will surface trust-score manipulation patterns. Unlike Tay's online poisoning, this is batch-training data corruption. Velocity anomaly detection and temporal consistency validation are the correct mitigations.",
     lesson:
       "Fraud models are adversarial by nature. Treating training data as trusted is naive. Continuous anomaly detection on the training pipeline is as important as anomaly detection on predictions.",
-    startingHandicap: "Skew starts at Medium — adversarial transactions are already influencing your feature distribution.",
+    startingHandicap: "Prediction distribution skew starts at Medium — adversarial transactions have already influenced your trust-score feature distribution.",
+    problemType: "classification",
+    metricLabels: { precision: "Precision", recall: "Recall" },
   },
 };
+
+// ---- Metric label helper ----
+
+export function getMetricLabels(scenario: string): { precision: string; recall: string } {
+  return SCENARIO_BRIEFS[scenario]?.metricLabels ?? { precision: "Precision", recall: "Recall" };
+}
+
+export function getProblemType(scenario: string): ScenarioBrief["problemType"] {
+  return SCENARIO_BRIEFS[scenario]?.problemType ?? "classification";
+}
+
+// ---- Event color helper ----
+
+export function getEventColor(eventType?: GameEvent["eventType"]): string {
+  switch (eventType) {
+    case "overfitting": return "border-orange-400/60";
+    case "poisoning":   return "border-red-500/60";
+    case "bias":        return "border-purple-500/60";
+    case "latency":     return "border-yellow-400/60";
+    case "drift":       return "border-blue-400/60";
+    case "triggered":   return "border-destructive/50";
+    default:            return "border-primary/60";
+  }
+}
+
+export function getEventTypeLabel(eventType?: GameEvent["eventType"]): string {
+  switch (eventType) {
+    case "overfitting": return "OVERFITTING";
+    case "poisoning":   return "DATA POISONING";
+    case "bias":        return "BIAS / FAIRNESS";
+    case "latency":     return "LATENCY";
+    case "drift":       return "CONCEPT DRIFT";
+    case "triggered":   return "TRIGGERED";
+    default:            return "INCIDENT";
+  }
+}
 
 // ---- Daily Brief ----
 
@@ -756,14 +1079,16 @@ export function generateDailyBrief(state: GameState): DailyBriefData | null {
   if (state.history.length === 0) return null;
   const prev = state.history[state.history.length - 1] as GameState;
 
+  const labels = getMetricLabels(state.scenario);
+
   const deltas: DailyBriefData["deltas"] = [
     {
-      name: "PRECISION",
+      name: labels.precision.toUpperCase().slice(0, 7),
       delta: state.metrics.precision - prev.metrics.precision,
       current: state.metrics.precision,
     },
     {
-      name: "RECALL",
+      name: labels.recall.toUpperCase().slice(0, 7),
       delta: state.metrics.recall - prev.metrics.recall,
       current: state.metrics.recall,
     },
@@ -773,13 +1098,13 @@ export function generateDailyBrief(state: GameState): DailyBriefData | null {
       current: state.metrics.slaAdherence,
     },
     {
-      name: "STALENESS",
+      name: "STALE",
       delta: -(state.metrics.featureStaleness - prev.metrics.featureStaleness),
       current: state.metrics.featureStaleness,
       isInverse: true,
     },
     {
-      name: "COST IDX",
+      name: "COST",
       delta: -(state.metrics.inferenceCost - prev.metrics.inferenceCost),
       current: state.metrics.inferenceCost,
       isInverse: true,
@@ -804,9 +1129,9 @@ export function generateDailyBrief(state: GameState): DailyBriefData | null {
   if (m.precision <= 20 || m.recall <= 20 || m.slaAdherence <= 20 || m.featureStaleness > 40) {
     severity = "critical";
     if (m.precision <= m.recall && m.precision <= m.slaAdherence) {
-      diagnosis = `CRITICAL: Precision at ${m.precision.toFixed(0)}% — ${daysLeft} days to survive. Emergency retrain or rollback needed immediately.`;
+      diagnosis = `CRITICAL: ${labels.precision} at ${m.precision.toFixed(0)}% — ${daysLeft} days to survive. Emergency retrain or rollback needed immediately.`;
     } else if (m.recall <= m.slaAdherence) {
-      diagnosis = `CRITICAL: Recall collapsed to ${m.recall.toFixed(0)}%. Model is missing most positive cases. Rollback strongly advised.`;
+      diagnosis = `CRITICAL: ${labels.recall} collapsed to ${m.recall.toFixed(0)}%. Model is missing most positive cases. Rollback strongly advised.`;
     } else if (m.featureStaleness > 40) {
       diagnosis = `CRITICAL: Feature staleness at ${m.featureStaleness.toFixed(0)}h — 8h from loss threshold. Enable Feature Store now.`;
     } else {
@@ -817,7 +1142,7 @@ export function generateDailyBrief(state: GameState): DailyBriefData | null {
     diagnosis = `WARNING: Feature staleness at ${m.featureStaleness.toFixed(0)}h (threshold: 48h). Enable Feature Store or force refresh this turn.`;
   } else if (minAccuracy < 50) {
     severity = "warning";
-    diagnosis = `WARNING: Model accuracy degrading (Precision ${m.precision.toFixed(0)}%, Recall ${m.recall.toFixed(0)}%). Consider retraining or promoting a staged candidate.`;
+    diagnosis = `WARNING: Model quality degrading (${labels.precision} ${m.precision.toFixed(0)}%, ${labels.recall} ${m.recall.toFixed(0)}%). Consider retraining or promoting a staged candidate.`;
   } else if (m.slaAdherence < 75) {
     severity = "warning";
     diagnosis = `WARNING: SLA at ${m.slaAdherence.toFixed(0)}% — approaching breach territory. Address root cause before next peak traffic window.`;
@@ -826,7 +1151,7 @@ export function generateDailyBrief(state: GameState): DailyBriefData | null {
     diagnosis = `WARNING: Inference cost index at ${m.inferenceCost.toFixed(0)}/100. Unchecked scaling will exhaust budget before Day 14.`;
   } else if (m.skew === "High") {
     severity = "warning";
-    diagnosis = "WARNING: Training-serving skew is HIGH. Feature distributions have diverged from your training baseline — model predictions are unreliable.";
+    diagnosis = "WARNING: Distribution skew is HIGH. Feature distributions have diverged from your training baseline — model predictions are unreliable.";
   } else if (deltas.every((d) => d.delta >= -0.6)) {
     diagnosis = `Systems nominal. All metrics within safe operating range. ${daysLeft} day${daysLeft !== 1 ? "s" : ""} remaining — maintain current trajectory.`;
   } else {
@@ -845,6 +1170,7 @@ export function generateDailyBrief(state: GameState): DailyBriefData | null {
 }
 
 export function generatePostMortem(state: GameState): string[] {
+  const labels = getMetricLabels(state.scenario);
   const bullets: string[] = [];
   if (!state.featureStore.enabled) {
     bullets.push("Feature Store was never enabled — feature staleness escalated unchecked, widening training-serving skew.");
@@ -856,10 +1182,10 @@ export function generatePostMortem(state: GameState): string[] {
     bullets.push("Model Registry had no staging model — you had no safe rollback option when production degraded.");
   }
   if (state.metrics.precision <= 0) {
-    bullets.push("Precision hit zero — the model was making meaningless predictions. Emergency retraining or rollback was needed.");
+    bullets.push(`${labels.precision} hit zero — the model was making meaningless predictions. Emergency retraining or rollback was needed.`);
   }
   if (state.metrics.recall <= 0) {
-    bullets.push("Recall hit zero — the model stopped detecting positive cases entirely.");
+    bullets.push(`${labels.recall} hit zero — the model stopped detecting positive cases entirely.`);
   }
   if (state.metrics.slaAdherence <= 0) {
     bullets.push("SLA adherence hit zero — a complete production outage. Infrastructure scaling or rollback was critical.");
