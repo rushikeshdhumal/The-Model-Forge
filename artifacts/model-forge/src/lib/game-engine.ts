@@ -933,6 +933,10 @@ export function getEventForDay(state: GameState): GameEvent | null {
             s.metrics.precision += 8;
             s.metrics.recall += 5;
             s.metrics.inferenceCost += 5;
+            // Retraining on fresh data that matches the current serving distribution also reduces
+            // training-serving skew — the new model learns from the same distribution it will serve.
+            if (s.metrics.skew === "High") s.metrics.skew = "Medium";
+            else if (s.metrics.skew === "Medium") s.metrics.skew = "Low";
             const newId = `model_v${s.day}`;
             const retrainType = ["tesla", "netflix", "google", "tay", "facebook"].includes(s.scenario)
               ? "Neural Network"
@@ -949,7 +953,13 @@ export function getEventForDay(state: GameState): GameEvent | null {
           id: "B",
           label: "Schedule for next sprint",
           effect: (s) => {
-            s.futureEffects.push({ triggerDay: s.day + 3, metric: "precision", delta: 5, message: "Scheduled retrain on fresh data improved model quality" });
+            // A scheduled retrain on fresh data improves both signal classes — not just precision.
+            // Recall benefits because the model re-learns which patterns actually indicate positives
+            // in the current distribution, not just where the false-positive boundary sits.
+            s.futureEffects.push(
+              { triggerDay: s.day + 3, metric: "precision", delta: 5, message: "Scheduled retrain on fresh data improved model quality — precision gains confirmed" },
+              { triggerDay: s.day + 3, metric: "recall", delta: 3, message: "Scheduled retrain also recovered recall — model detects more true positives in current distribution" }
+            );
           },
         },
         { id: "C", label: "Skip — current model is good enough", effect: (_s) => {} },
@@ -963,8 +973,8 @@ export function getEventForDay(state: GameState): GameEvent | null {
       choices: [
         { id: "A", label: "Switch to on-demand instances", effect: (s) => { s.metrics.inferenceCost += 15; } },
         { id: "B", label: "Retry on next spot window", effect: (s) => { s.metrics.slaAdherence -= 8; } },
-        // Graceful degradation queues requests — throughput drops (SLA impact), not the model's recall quality
-        { id: "C", label: "Queue requests — degrade gracefully", effect: (s) => { s.metrics.slaAdherence -= 5; } },
+        // Checkpointing partial results limits data loss; the requeue delay causes a minor SLA dip
+        { id: "C", label: "Checkpoint partial results — requeue remaining work", effect: (s) => { s.metrics.slaAdherence -= 5; } },
       ],
     },
     {
@@ -1028,7 +1038,13 @@ export function getEventForDay(state: GameState): GameEvent | null {
       title: "LEGAL EXPLAINABILITY REQUEST",
       description: "Legal team requires model explainability report for a pending audit within 48 hours.",
       choices: [
-        { id: "A", label: "Generate model explainability report", effect: (s) => { s.metrics.inferenceCost += 5; } },
+        { id: "A", label: "Generate model explainability report", effect: (s) => {
+          // Full SHAP/LIME analysis over the production dataset is expensive but surfaces feature-level
+          // attribution. This often reveals high-noise or low-signal features the model over-relies on —
+          // identifying and removing them improves precision as a side effect of the audit.
+          s.metrics.inferenceCost += 5;
+          s.metrics.precision += 2;
+        } },
         // Surrogate models are for explanation only — they don't touch the serving path or affect live model precision
         { id: "B", label: "Use surrogate model for explanation", effect: (s) => { s.metrics.inferenceCost += 3; } },
         // Denying a legal audit request doesn't hurt serving SLA — it creates a delayed regulatory consequence
@@ -1054,10 +1070,14 @@ export function getEventForDay(state: GameState): GameEvent | null {
           id: "A",
           label: "Relabel affected samples and retrain",
           effect: (s) => {
-            // Full relabeling + retrain recovers both signal classes — precision and recall both improve
+            // Full relabeling + retrain recovers both signal classes — precision and recall both improve.
+            // Retraining on clean, correctly-labeled data also realigns the model with the true
+            // feature-label relationship, reducing training-serving skew as a side effect.
             s.metrics.precision += 7;
             s.metrics.recall += 5;
             s.metrics.inferenceCost += 8;
+            if (s.metrics.skew === "High") s.metrics.skew = "Medium";
+            else if (s.metrics.skew === "Medium") s.metrics.skew = "Low";
           },
         },
         {
@@ -1105,10 +1125,17 @@ export function getEventForDay(state: GameState): GameEvent | null {
           id: "B",
           label: "Trigger full retraining pipeline on latest labeled data",
           effect: (s) => {
-            // Full retrain realigns the model with current data distribution — both metrics improve
-            s.metrics.precision += 4;
-            s.metrics.recall += 8;
+            // The problem is over-prediction of positives (too many false positives).
+            // A full retrain on latest labeled data corrects this: precision improves most
+            // because the model re-learns the positive/negative boundary more conservatively.
+            // Recall also gains but less — the retrain helps detection without over-correcting.
+            // Retraining on current data also realigns the model with the live feature distribution,
+            // reducing training-serving skew.
+            s.metrics.precision += 8;
+            s.metrics.recall += 4;
             s.metrics.inferenceCost += 10;
+            if (s.metrics.skew === "High") s.metrics.skew = "Medium";
+            else if (s.metrics.skew === "Medium") s.metrics.skew = "Low";
           },
         },
         {
@@ -1248,10 +1275,14 @@ export function getEventForDay(state: GameState): GameEvent | null {
           id: "A",
           label: "Scrub contaminated samples and retrain on verified labels only",
           effect: (s) => {
-            // Clean retrain eliminates the self-reinforcing bias — both metrics recover
+            // Clean retrain eliminates the self-reinforcing bias — both metrics recover.
+            // Training on verified ground-truth labels also corrects the feature-label mapping,
+            // reducing training-serving skew that accumulated from the contaminated training cycles.
             s.metrics.precision += 6;
             s.metrics.recall += 5;
             s.metrics.inferenceCost += 10;
+            if (s.metrics.skew === "High") s.metrics.skew = "Medium";
+            else if (s.metrics.skew === "Medium") s.metrics.skew = "Low";
           },
         },
         {
@@ -1595,12 +1626,15 @@ export function generateDailyBrief(state: GameState): DailyBriefData | null {
 
   if (m.precision <= 20 || m.recall <= 20 || m.slaAdherence <= 20 || m.featureStaleness > 28) {
     severity = "critical";
-    if (m.precision <= m.recall && m.precision <= m.slaAdherence) {
+    // Staleness checked first — it has a hard loss threshold at >32h and players least expect it.
+    // At >28h the buffer is only 4h; at 31h only 1h. Message must be time-accurate.
+    if (m.featureStaleness > 24) {
+      const hoursLeft = Math.max(0, Math.round(32 - m.featureStaleness));
+      diagnosis = `CRITICAL: Feature staleness at ${m.featureStaleness.toFixed(0)}h — ${hoursLeft}h from loss threshold. Enable Feature Store now.`;
+    } else if (m.precision <= 20 && m.precision <= m.recall) {
       diagnosis = `CRITICAL: ${labels.precision} at ${m.precision.toFixed(0)}% — ${daysLeft} days to survive. Emergency retrain or rollback needed immediately.`;
-    } else if (m.recall <= m.slaAdherence) {
+    } else if (m.recall <= 20) {
       diagnosis = `CRITICAL: ${labels.recall} collapsed to ${m.recall.toFixed(0)}%. Model is missing most positive cases. Rollback strongly advised.`;
-    } else if (m.featureStaleness > 30) {
-      diagnosis = `CRITICAL: Feature staleness at ${m.featureStaleness.toFixed(0)}h — 6h from loss threshold. Enable Feature Store now.`;
     } else {
       diagnosis = `CRITICAL: SLA adherence at ${m.slaAdherence.toFixed(0)}%. Infrastructure is near collapse — scale or roll back immediately.`;
     }

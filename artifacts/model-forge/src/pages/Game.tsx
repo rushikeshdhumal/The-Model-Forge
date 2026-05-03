@@ -134,7 +134,7 @@ const CODEX_STATIC_METRICS = [
       "Training-serving skew: how much your live feature distributions have diverged from the distribution your model was trained on.",
     formula: "Distribution distance between training-time and serving-time features",
     whyItMatters:
-      "Your model learned patterns from training data. If the features it sees in production look different, its learned patterns no longer apply — predictions degrade silently without any explicit metric dropping immediately.",
+      "Your model learned patterns from training data. If the features it sees in production look different, its learned patterns no longer apply. When skew reaches High, an extra −1/day penalty is applied to both precision and recall on top of normal passive decay — compounding degradation until the model is retrained on the current distribution.",
     causes: [
       "Feature Store disabled — serving features diverge from training over time",
       "Data poisoning injecting adversarial inputs into the pipeline",
