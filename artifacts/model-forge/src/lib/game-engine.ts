@@ -5,7 +5,9 @@ export const DIFFICULTY_BY_SCENARIO: Record<string, number> = {
   uber: 3, facebook: 3, tay: 3, stripe: 3, amazon: 3, twitter: 3,
 };
 
-const DIFFICULTY_BONUS: Record<number, number> = { 1: 0, 2: 15, 3: 25 };
+// Default (tier 1) gets a +10 bonus so that perfect play (max raw = 90) can reach exactly S ≥ 100.
+// Tier 2 and 3 bonuses extend this further for harder scenarios.
+const DIFFICULTY_BONUS: Record<number, number> = { 1: 10, 2: 15, 3: 25 };
 
 export function computeRunScore(state: GameState): { score: number; grade: string } {
   const difficulty = DIFFICULTY_BY_SCENARIO[state.scenario] ?? 1;
@@ -80,6 +82,9 @@ function advanceDay(s: GameState): GameState {
   s.metrics.precision = Math.max(0, s.metrics.precision - 1);
   s.metrics.recall = Math.max(0, s.metrics.recall - 1);
   s.metrics.featureStaleness = s.featureStore.enabled ? 2 : s.metrics.featureStaleness + 2;
+  // Note: loss fires at > 32h (see below). With +2/day from day 1 (start=2), passive decay alone
+  // reaches 30h by day 14 (safe). Loss requires compounding events (e.g. Pipeline Delay A) + ignoring
+  // the triggered stale_features event (> 24h) three consecutive times.
   s.metrics.slaAdherence = Math.max(0, s.metrics.slaAdherence - 0.5);
 
   if (s.ciCd.autoRetrain) {
@@ -120,7 +125,7 @@ function advanceDay(s: GameState): GameState {
     s.metrics.precision <= 0 ||
     s.metrics.recall <= 0 ||
     s.metrics.slaAdherence <= 0 ||
-    s.metrics.featureStaleness > 36 ||
+    s.metrics.featureStaleness > 32 ||
     s.metrics.inferenceCost >= 100
   ) {
     s.status = "lost";
@@ -696,21 +701,22 @@ export function getEventForDay(state: GameState): GameEvent | null {
       eventType: "triggered",
       title: "CRITICAL: MODEL QUALITY DEGRADED",
       description:
-        "Your model's primary quality metric has dropped below 60%. Prediction quality is critically degraded in production — immediate action required.",
+        "Your model's precision has dropped below 60%. Predictions are flooded with false positives — users are getting irrelevant results at an unacceptable rate. Immediate action required.",
       choices: [
         {
           id: "A",
+          // Emergency retrain on fresh data recovers both precision and recall — a full model rebuild
           label: "Emergency retrain on latest data",
           effect: (s) => {
             s.metrics.precision += 20;
+            s.metrics.recall += 10;
             s.metrics.inferenceCost += 5;
           },
         },
         {
           id: "B",
-          label: "Rollback to last stable checkpoint",
+          label: "Switch to a lighter fallback model — restores precision at cost of recall",
           effect: (s) => {
-            // Rollback recovers some precision but the old model may be stale on current distribution
             s.metrics.precision += 15;
             s.metrics.recall -= 10;
           },
@@ -724,6 +730,47 @@ export function getEventForDay(state: GameState): GameEvent | null {
               metric: "slaAdherence",
               delta: -10,
               message: "Stakeholders escalated quality degradation — SLA breach incoming",
+            });
+          },
+        },
+      ],
+    };
+  }
+
+  if (state.metrics.recall < 60) {
+    return {
+      id: "low_recall",
+      eventType: "triggered",
+      title: "CRITICAL: DETECTION RATE COLLAPSED",
+      description:
+        "Your model's recall has dropped below 60%. The model is missing most of what it was designed to find — false negatives are at a critical level. Every real signal you should be catching is now going undetected.",
+      choices: [
+        {
+          id: "A",
+          label: "Emergency retrain to recover detection coverage",
+          effect: (s) => {
+            s.metrics.recall += 20;
+            s.metrics.precision -= 5;
+            s.metrics.inferenceCost += 5;
+          },
+        },
+        {
+          id: "B",
+          label: "Lower detection threshold — catch more positives at cost of precision",
+          effect: (s) => {
+            s.metrics.recall += 12;
+            s.metrics.precision -= 10;
+          },
+        },
+        {
+          id: "C",
+          label: "Alert stakeholders and monitor",
+          effect: (s) => {
+            s.futureEffects.push({
+              triggerDay: s.day + 2,
+              metric: "slaAdherence",
+              delta: -10,
+              message: "Stakeholders escalated detection failures — SLA breach incoming",
             });
           },
         },
@@ -776,7 +823,8 @@ export function getEventForDay(state: GameState): GameEvent | null {
       choices: [
         {
           id: "A",
-          label: "Execute emergency service recovery",
+          // Switching to a lighter fallback model restores availability fast — but simpler models are less precise
+          label: "Switch to a lighter fallback model — restores SLA, trades precision",
           effect: (s) => {
             s.metrics.slaAdherence += 15;
             s.metrics.precision -= 5;
@@ -792,13 +840,15 @@ export function getEventForDay(state: GameState): GameEvent | null {
         },
         {
           id: "C",
-          label: "Investigate root cause",
+          label: "Investigate root cause — full fix deployed in 24h",
           effect: (s) => {
+            // +5 immediately to acknowledge partial triage, +15 next day when fix is deployed
+            s.metrics.slaAdherence += 5;
             s.futureEffects.push({
               triggerDay: s.day + 1,
               metric: "slaAdherence",
-              delta: 5,
-              message: "Root cause investigation resolved bottleneck",
+              delta: 15,
+              message: "Root cause investigation complete — fix deployed, SLA restored",
             });
           },
         },
@@ -833,13 +883,15 @@ export function getEventForDay(state: GameState): GameEvent | null {
           id: "A",
           label: "Promote canary to production",
           effect: (s) => {
-            // A better model improves both precision and recall — not just one axis
             s.metrics.precision += 3;
             s.metrics.recall += 5;
             const newId = `model_v${s.day}`;
             const canaryType = ["tesla", "netflix", "google", "tay", "facebook"].includes(s.scenario)
               ? "Neural Network"
               : "XGBoost";
+            // Archive the current production model before promoting the canary
+            const oldProdIdx = s.registry.models.findIndex((m) => m.id === s.registry.productionModelId);
+            if (oldProdIdx >= 0) s.registry.models[oldProdIdx].stage = "archived";
             s.registry.models.push({ id: newId, type: canaryType, version: `${s.day}.0`, stage: "production", trainedOnDay: s.day, dataVersion: "dataset_latest", accuracy: 87, cost: 0.1, latency: 15, explainability: "Medium" });
             s.registry.productionModelId = newId;
           },
@@ -858,7 +910,6 @@ export function getEventForDay(state: GameState): GameEvent | null {
           id: "A",
           label: "Retrain immediately",
           effect: (s) => {
-            // More data and fresher distribution improves both quality metrics
             s.metrics.precision += 8;
             s.metrics.recall += 5;
             s.metrics.inferenceCost += 5;
@@ -867,6 +918,11 @@ export function getEventForDay(state: GameState): GameEvent | null {
               ? "Neural Network"
               : "XGBoost";
             s.registry.models.push({ id: newId, type: retrainType, version: `${s.day}.0`, stage: "staging", trainedOnDay: s.day, dataVersion: "dataset_2025Q2", accuracy: 88, cost: 0.1, latency: 15, explainability: "Medium" });
+            // Staging model auto-promotes after validation cycle — precision and recall gains land on day+2
+            s.futureEffects.push(
+              { triggerDay: s.day + 2, metric: "precision", delta: 4, message: "Staged model passed validation — promoted to production, precision gains confirmed" },
+              { triggerDay: s.day + 2, metric: "recall", delta: 2, message: "Staged model promoted — recall improvement confirmed in live traffic evaluation" }
+            );
           },
         },
         {
@@ -905,7 +961,13 @@ export function getEventForDay(state: GameState): GameEvent | null {
             s.futureEffects.push({ triggerDay: s.day + 1, metric: "slaAdherence", delta: 8, message: "Security patch applied — SLA stabilized" });
           },
         },
-        { id: "B", label: "Schedule during off-peak maintenance", effect: (_s) => {} },
+        // Off-peak scheduling is safer than immediate patch but the maintenance window still causes a brief outage
+        { id: "B", label: "Schedule during off-peak maintenance window", effect: (s) => {
+          s.futureEffects.push(
+            { triggerDay: s.day + 1, metric: "slaAdherence", delta: -3, message: "Off-peak maintenance window began — brief service interruption during CVE patch" },
+            { triggerDay: s.day + 2, metric: "slaAdherence", delta: 6, message: "CVE patch deployed cleanly during maintenance — SLA stabilized" }
+          );
+        } },
         // CVE exploit is most likely DoS (SLA hit) or model-serving disruption, not training-serving skew
         { id: "C", label: "Accept risk — delay indefinitely", effect: (s) => {
           s.futureEffects.push(
@@ -934,7 +996,8 @@ export function getEventForDay(state: GameState): GameEvent | null {
       title: "DATA QUALITY ALERT",
       description: "Monitor detected an unusual spike in missing or corrupted values in the last inference batch.",
       choices: [
-        { id: "A", label: "Investigate and fix upstream data pipeline", effect: (s) => { s.metrics.featureStaleness = 3; } },
+        // Fix: never make staleness worse — if already fresh (e.g. 2h), fixing the pipeline doesn't regress it
+        { id: "A", label: "Investigate and fix upstream data pipeline", effect: (s) => { s.metrics.featureStaleness = Math.min(s.metrics.featureStaleness, 3); } },
         { id: "B", label: "Apply data imputation strategy", effect: (s) => { s.metrics.precision -= 3; } },
         { id: "C", label: "Ignore — likely a blip", effect: (s) => { s.metrics.skew = s.metrics.skew === "Low" ? "Medium" : "High"; } },
       ],
@@ -1272,7 +1335,7 @@ export function generateDailyBrief(state: GameState): DailyBriefData | null {
   const minAccuracy = Math.min(m.precision, m.recall);
   const daysLeft = 14 - state.day + 1;
 
-  if (m.precision <= 20 || m.recall <= 20 || m.slaAdherence <= 20 || m.featureStaleness > 30) {
+  if (m.precision <= 20 || m.recall <= 20 || m.slaAdherence <= 20 || m.featureStaleness > 28) {
     severity = "critical";
     if (m.precision <= m.recall && m.precision <= m.slaAdherence) {
       diagnosis = `CRITICAL: ${labels.precision} at ${m.precision.toFixed(0)}% — ${daysLeft} days to survive. Emergency retrain or rollback needed immediately.`;
@@ -1286,12 +1349,12 @@ export function generateDailyBrief(state: GameState): DailyBriefData | null {
   } else if (m.featureStaleness > 24) {
     severity = "warning";
     diagnosis = `WARNING: Feature staleness at ${m.featureStaleness.toFixed(0)}h (threshold: 36h). Enable Feature Store or force refresh this turn.`;
-  } else if (minAccuracy < 50) {
+  } else if (minAccuracy < 65) {
     severity = "warning";
-    diagnosis = `WARNING: Model quality degrading (${labels.precision} ${m.precision.toFixed(0)}%, ${labels.recall} ${m.recall.toFixed(0)}%). Consider retraining or promoting a staged candidate.`;
-  } else if (m.slaAdherence < 75) {
+    diagnosis = `WARNING: Model quality degrading (${labels.precision} ${m.precision.toFixed(0)}%, ${labels.recall} ${m.recall.toFixed(0)}%). Retrain or promote a staged candidate before the triggered alert threshold.`;
+  } else if (m.slaAdherence < 85) {
     severity = "warning";
-    diagnosis = `WARNING: SLA at ${m.slaAdherence.toFixed(0)}% — approaching breach territory. Address root cause before next peak traffic window.`;
+    diagnosis = `WARNING: SLA at ${m.slaAdherence.toFixed(0)}% — approaching breach territory. Address root cause before it drops below the 80% trigger threshold.`;
   } else if (m.inferenceCost > 65) {
     severity = "warning";
     diagnosis = `WARNING: Inference cost index at ${m.inferenceCost.toFixed(0)}/100. Unchecked scaling will exhaust budget before Day 14.`;
@@ -1336,14 +1399,18 @@ export function generatePostMortem(state: GameState): string[] {
   if (state.metrics.slaAdherence <= 0) {
     bullets.push("SLA adherence hit zero — a complete production outage. Infrastructure scaling or rollback was critical.");
   }
-  if (state.metrics.featureStaleness > 36) {
-    bullets.push("Feature staleness exceeded 36 hours — features were stale enough to make training-serving skew catastrophic.");
+  if (state.metrics.featureStaleness > 32) {
+    bullets.push("Feature staleness exceeded 32 hours — features were stale enough to make training-serving skew catastrophic.");
   }
   if (state.metrics.inferenceCost >= 100) {
     bullets.push("Inference cost hit the limit — unchecked scaling without optimization bankrupted the budget.");
   }
   if (bullets.length === 0) {
-    bullets.push("The simulation ended unexpectedly. Review your metric decisions and event choices.");
+    if (state.status === "won") {
+      bullets.push("Full MLOps stack maintained throughout the run — Feature Store, CI/CD, and staged models all active. This is the correct operational posture for any production ML system.");
+    } else {
+      bullets.push("The simulation ended unexpectedly. Review your metric decisions and event choices.");
+    }
   }
   return bullets;
 }

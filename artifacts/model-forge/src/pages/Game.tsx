@@ -575,9 +575,9 @@ const CODEX_CONCEPTS = [
     term: "CI/CD AUTO-RETRAIN",
     icon: "⬢",
     explanation:
-      "A continuous integration and deployment pipeline that automatically retrains your model on a schedule or when drift is detected, runs validation tests, and promotes the new model to staging. In the game, enabling it adds +2% Precision and +1% Recall per day — simulating the benefit of keeping the model current on both quality dimensions.",
-    benefit: "+2% Precision and +1% Recall per day. Counters concept drift across both quality dimensions automatically.",
-    cost: "Increased Inference Cost from compute for retraining runs.",
+      "A continuous integration and deployment pipeline that automatically retrains your model on a schedule or when drift is detected, runs validation tests, and promotes the new model to staging. In the game, enabling it adds +2 Precision and +1 Recall per day — but only while each metric is below 85. Above 85, the data distribution coverage saturates: further gains require fundamentally new training data, not more retrains. The +2 Inference Cost per day continues regardless of the cap.",
+    benefit: "+2 Precision and +1 Recall per day (up to 85 each). Counters concept drift automatically.",
+    cost: "+2 Inference Cost per day from retraining compute — continues even above the 85% quality cap.",
   },
   {
     term: "MODEL REGISTRY",
