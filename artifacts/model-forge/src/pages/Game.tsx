@@ -1037,6 +1037,7 @@ export default function Game() {
   const [scenarioBrief, setScenarioBrief] = useState<ScenarioBrief | null>(null);
   const [showCodex, setShowCodex] = useState(false);
   const [codexSection, setCodexSection] = useState<"metrics" | "concepts" | "reference" | "scenarios">("metrics");
+  const [codexFocusScenario, setCodexFocusScenario] = useState<string | null>(null);
   const [showSave, setShowSave] = useState(false);
   const [restoreInput, setRestoreInput] = useState("");
   const [restoreError, setRestoreError] = useState("");
@@ -1073,6 +1074,18 @@ export default function Game() {
       setSessionId(sessionData.sessionId);
     }
   }, [sessionData]);
+
+  // Auto-open + scroll to a specific scenario in the Codex SCENARIOS tab when navigated
+  // from the Lessons Learned section of the score screen.
+  useEffect(() => {
+    if (!codexFocusScenario || !showCodex || codexSection !== "scenarios") return;
+    const el = document.getElementById(`codex-scenario-${codexFocusScenario}`);
+    if (el) {
+      el.setAttribute("open", "");
+      setTimeout(() => el.scrollIntoView({ behavior: "smooth", block: "start" }), 120);
+    }
+    setCodexFocusScenario(null);
+  }, [codexFocusScenario, showCodex, codexSection]);
 
   const { data: loadData } = useLoadState(
     { session_id: sessionId ?? "" },
@@ -2278,6 +2291,72 @@ export default function Game() {
               </div>
             )}
 
+            {/* Lessons Learned */}
+            {(() => {
+              const entry = CODEX_SCENARIO_DIFFICULTY.find((s) => s.id === gameState.scenario);
+              if (!entry) return null;
+              const sig = entry.signatureEvent;
+              // Find a choice-entry on the signature event's day (signature events are the only
+              // player-choice events scheduled for that specific day in each scenario).
+              const sigLog = gameState.eventLog.find((e) => e.day === sig.day && e.choice);
+              const dayReached = (gameState.day - 1) >= sig.day;
+              const tierColor =
+                entry.difficulty === 1 ? "text-primary border-primary/40"
+                : entry.difficulty === 2 ? "text-yellow-400 border-yellow-400/40"
+                : "text-destructive border-destructive/40";
+              const tierLabel =
+                entry.difficulty === 1 ? "BEGINNER ★☆☆"
+                : entry.difficulty === 2 ? "MODERATE ★★☆"
+                : "HARD ★★★";
+              return (
+                <div className="border border-border/40 bg-secondary/5 p-3 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div className="text-[10px] tracking-widest text-muted-foreground">LESSONS LEARNED</div>
+                    <span className={`text-[9px] border px-1.5 py-0.5 ${tierColor}`}>{tierLabel}</span>
+                  </div>
+
+                  {/* Scoring trap */}
+                  <div className="border-l-2 border-destructive/40 pl-2.5">
+                    <div className="text-[9px] tracking-widest text-destructive mb-1">SCORING TRAP</div>
+                    <p className="text-xs text-muted-foreground leading-relaxed">{entry.scoringTrap}</p>
+                  </div>
+
+                  {/* Signature event */}
+                  <div className="bg-secondary/20 border border-border/30 px-3 py-2.5 space-y-1.5">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="text-[9px] tracking-widest text-muted-foreground">SIGNATURE EVENT</span>
+                      <span className="text-[9px] border border-border/40 px-1.5 py-0.5 text-muted-foreground">DAY {sig.day}</span>
+                      {!dayReached
+                        ? <span className="text-[9px] border border-border/30 px-1.5 py-0.5 text-muted-foreground/60">NOT REACHED</span>
+                        : sigLog
+                          ? <span className="text-[9px] border border-primary/40 px-1.5 py-0.5 text-primary">ENCOUNTERED</span>
+                          : <span className="text-[9px] border border-border/30 px-1.5 py-0.5 text-muted-foreground/60">SKIPPED</span>
+                      }
+                    </div>
+                    <div className="text-[10px] font-bold text-primary tracking-wide">{sig.name}</div>
+                    {sigLog && (
+                      <div className="text-[10px] text-yellow-400/90">
+                        Your choice: <span className="font-bold">{sigLog.choice}</span>
+                      </div>
+                    )}
+                    <p className="text-xs text-muted-foreground leading-relaxed">{sig.insight}</p>
+                  </div>
+
+                  <button
+                    className="text-[10px] tracking-widest text-primary/70 hover:text-primary transition-colors underline underline-offset-2"
+                    onClick={() => {
+                      setShowGameOver(false);
+                      setCodexSection("scenarios");
+                      setCodexFocusScenario(gameState.scenario);
+                      setShowCodex(true);
+                    }}
+                  >
+                    OPEN FULL SCENARIO ENTRY IN CODEX →
+                  </button>
+                </div>
+              );
+            })()}
+
             {/* Actions */}
             <div className="flex flex-wrap gap-2 pt-1 border-t border-border/30">
               <Button
@@ -3014,7 +3093,7 @@ export default function Game() {
                   const tierColor = s.difficulty === 1 ? "text-primary border-primary/40" : s.difficulty === 2 ? "text-yellow-400 border-yellow-400/40" : "text-destructive border-destructive/40";
                   const problemLabel = s.problemType === "classification" ? "CLASSIFICATION" : s.problemType === "regression" ? "REGRESSION" : s.problemType === "ranking" ? "RANKING" : "GENERATIVE";
                   return (
-                    <details key={s.id} className={`group border open:border-primary/30 ${s.comingSoon ? "border-border/20 opacity-50" : "border-border/40"}`}>
+                    <details key={s.id} id={`codex-scenario-${s.id}`} className={`group border open:border-primary/30 ${s.comingSoon ? "border-border/20 opacity-50" : "border-border/40"}`}>
                       <summary className="flex items-center gap-2 px-3 py-2.5 cursor-pointer select-none list-none hover:bg-primary/5 transition-colors">
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2 flex-wrap">
