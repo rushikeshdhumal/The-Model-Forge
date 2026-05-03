@@ -261,8 +261,6 @@ components:
     LeaderboardEntry:
       type: object
       properties:
-        sessionId:
-          type: string
         username:
           type: string
           nullable: true
@@ -287,7 +285,6 @@ components:
         maxStreak:
           type: integer
       required:
-        - sessionId
         - scenario
         - day
         - wins

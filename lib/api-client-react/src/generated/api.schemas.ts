@@ -140,7 +140,6 @@ export interface SaveStateResponse {
 }
 
 export interface LeaderboardEntry {
-  sessionId: string;
   username?: string | null;
   scenario: string;
   day: number;

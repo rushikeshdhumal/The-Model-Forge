@@ -1608,7 +1608,7 @@ export default function Game() {
               {leaderboardData.entries.slice(0, 3).map((e, i) => {
                 const medal = i === 0 ? "🥇" : i === 1 ? "🥈" : "🥉";
                 return (
-                  <div key={e.sessionId} className="flex items-center gap-3 text-xs">
+                  <div key={`${e.username ?? "anon"}-${e.completedAt}`} className="flex items-center gap-3 text-xs">
                     <span>{medal}</span>
                     <span className="text-foreground/80 flex-1 truncate">
                       {e.username ?? <span className="italic text-muted-foreground/50">anonymous</span>}
@@ -2460,7 +2460,7 @@ export default function Game() {
               <CardContent>
                 <div className="space-y-1.5 text-xs">
                   {leaderboardData.entries.slice(0, 3).map((e, i) => (
-                    <div key={e.sessionId} className="flex justify-between items-center gap-2">
+                    <div key={`${e.username ?? "anon"}-${e.completedAt}`} className="flex justify-between items-center gap-2">
                       <span className="text-muted-foreground shrink-0">#{i + 1}</span>
                       <span className="text-foreground/80 truncate flex-1">
                         {e.username ?? <span className="italic text-muted-foreground/60">anon</span>}
@@ -2749,7 +2749,7 @@ export default function Game() {
                   });
                   return (
                     <div
-                      key={e.sessionId}
+                      key={`${e.username ?? "anon"}-${e.completedAt}`}
                       className={`grid grid-cols-[2rem_1fr_5rem_3rem_4rem_3.5rem_3.5rem] gap-2 items-center py-2 text-xs border-b border-border/20 last:border-0 transition-colors ${
                         isYou ? "bg-primary/5 text-primary" : "text-foreground/80 hover:bg-secondary/20"
                       }`}

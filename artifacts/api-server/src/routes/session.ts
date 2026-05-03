@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { randomUUID } from "crypto";
+import { randomUUID, randomBytes } from "crypto";
 import { eq, desc } from "drizzle-orm";
 import { db, sessionsTable, playersTable } from "@workspace/db";
 import bcrypt from "bcryptjs";
@@ -24,13 +24,15 @@ import {
 
 const router: IRouter = Router();
 
-// 10 attempts per IP per 15 minutes on auth endpoints
+// ── Rate limiters ─────────────────────────────────────────────────────────────
+
+// Auth operations that mutate credentials — 10 failed attempts per IP per 15 min
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 10,
   standardHeaders: true,
   legacyHeaders: false,
-  skipSuccessfulRequests: true, // only failed/all attempts count toward limit
+  skipSuccessfulRequests: true, // only count failed attempts (login / register / reset)
   handler: (_req, res) => {
     res.status(429).json({
       error: "Too many attempts. Please wait 15 minutes and try again.",
@@ -38,6 +40,69 @@ const authLimiter = rateLimit({
     });
   },
 });
+
+// Recovery-code generation: count ALL requests (successful too) to prevent
+// an attacker with valid credentials from looping to invalidate a victim's code
+const recoveryGenLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 5,
+  standardHeaders: true,
+  legacyHeaders: false,
+  skipSuccessfulRequests: false,
+  handler: (_req, res) => {
+    res.status(429).json({
+      error: "Too many recovery code requests. Please wait 15 minutes and try again.",
+      code: "RATE_LIMITED",
+    });
+  },
+});
+
+// Username lookup — light rate limit to prevent enumeration at scale
+const lookupLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 20,
+  standardHeaders: true,
+  legacyHeaders: false,
+  skipSuccessfulRequests: false,
+  handler: (_req, res) => {
+    res.status(429).json({
+      error: "Too many lookup requests. Please slow down.",
+      code: "RATE_LIMITED",
+    });
+  },
+});
+
+// General write limiter — save-state / new-session (prevent DB flooding)
+const writeLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 30,
+  standardHeaders: true,
+  legacyHeaders: false,
+  skipSuccessfulRequests: false,
+  handler: (_req, res) => {
+    res.status(429).json({
+      error: "Too many requests. Please slow down.",
+      code: "RATE_LIMITED",
+    });
+  },
+});
+
+// General read limiter — leaderboard / load-state
+const readLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 60,
+  standardHeaders: true,
+  legacyHeaders: false,
+  skipSuccessfulRequests: false,
+  handler: (_req, res) => {
+    res.status(429).json({
+      error: "Too many requests. Please slow down.",
+      code: "RATE_LIMITED",
+    });
+  },
+});
+
+// ── Shared constants ──────────────────────────────────────────────────────────
 
 const DEFAULT_STATE = {
   sessionId: "",
@@ -84,13 +149,37 @@ const DEFAULT_STATE = {
 
 const BCRYPT_ROUNDS = 10;
 
-router.get("/new-session", (_req, res) => {
+// Dummy hash used to equalise timing in paths that would otherwise skip bcrypt.compare
+const DUMMY_HASH = "$2a$10$abcdefghijklmnopqrstuuABCDEFGHIJKLMNOPQRSTUVWXYZ012346";
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+// Generate a cryptographically secure recovery code: FORGE-XXXX-XXXX-XXXX
+// Uses crypto.randomBytes instead of Math.random
+function generateRecoveryCode(): string {
+  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; // no 0/O/1/I confusion
+  const buf = randomBytes(12); // 4 bytes per segment × 3 segments
+  let code = "FORGE";
+  for (let seg = 0; seg < 3; seg++) {
+    code += "-";
+    for (let i = 0; i < 4; i++) {
+      // Use modulo-rejection sampling alternative: buf byte is 0-255, chars.length=32
+      // 256 is divisible by 32, so no bias
+      code += chars[buf[seg * 4 + i]! % chars.length];
+    }
+  }
+  return code;
+}
+
+// ── Routes ────────────────────────────────────────────────────────────────────
+
+router.get("/new-session", writeLimiter, (_req, res) => {
   const sessionId = randomUUID();
   const data = NewSessionResponse.parse({ sessionId });
   res.json(data);
 });
 
-router.get("/load-state", async (req, res) => {
+router.get("/load-state", readLimiter, async (req, res) => {
   const params = LoadStateQueryParams.parse(req.query);
   const { session_id } = params;
 
@@ -116,7 +205,7 @@ router.get("/load-state", async (req, res) => {
   }
 });
 
-router.post("/save-state", async (req, res) => {
+router.post("/save-state", writeLimiter, async (req, res) => {
   const body = SaveStateBody.parse(req.body);
   const { sessionId, state } = body;
 
@@ -151,14 +240,7 @@ router.post("/save-state", async (req, res) => {
   }
 });
 
-// Helper to generate a human-readable recovery code: FORGE-XXXX-XXXX-XXXX
-function generateRecoveryCode(): string {
-  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; // no 0/O/1/I confusion
-  const seg = () => Array.from({ length: 4 }, () => chars[Math.floor(Math.random() * chars.length)]).join("");
-  return `FORGE-${seg()}-${seg()}-${seg()}`;
-}
-
-router.post("/generate-recovery", authLimiter, async (req, res) => {
+router.post("/generate-recovery", recoveryGenLimiter, async (req, res) => {
   const body = GenerateRecoveryBody.parse(req.body);
   const username = body.username.trim().toLowerCase();
   const { password } = body;
@@ -166,6 +248,8 @@ router.post("/generate-recovery", authLimiter, async (req, res) => {
   try {
     const rows = await db.select().from(playersTable).where(eq(playersTable.username, username)).limit(1);
     if (rows.length === 0) {
+      // Equalise timing: still run bcrypt so response time doesn't reveal account existence
+      await bcrypt.compare(password, DUMMY_HASH);
       res.status(401).json({ error: "Invalid username or password.", code: "INVALID_CREDENTIALS" });
       return;
     }
@@ -195,13 +279,13 @@ router.post("/reset-password", authLimiter, async (req, res) => {
 
   try {
     const rows = await db.select().from(playersTable).where(eq(playersTable.username, username)).limit(1);
-    if (rows.length === 0 || !rows[0].recoveryHash) {
-      res.status(401).json({ error: "Invalid username or recovery code.", code: "INVALID_CREDENTIALS" });
-      return;
-    }
-    const player = rows[0];
-    const codeMatch = await bcrypt.compare(recoveryCode.trim().toUpperCase(), player.recoveryHash!);
-    if (!codeMatch) {
+
+    // Always run bcrypt.compare to equalise response time regardless of whether the
+    // account or recovery hash exists — prevents timing-based enumeration
+    const hashToCompare = rows[0]?.recoveryHash ?? DUMMY_HASH;
+    const codeMatch = await bcrypt.compare(recoveryCode.trim().toUpperCase(), hashToCompare);
+
+    if (rows.length === 0 || !rows[0].recoveryHash || !codeMatch) {
       res.status(401).json({ error: "Invalid username or recovery code.", code: "INVALID_CREDENTIALS" });
       return;
     }
@@ -220,10 +304,13 @@ router.post("/reset-password", authLimiter, async (req, res) => {
   }
 });
 
-router.get("/check-username", async (req, res) => {
+const USERNAME_MAX_LENGTH = 24;
+const USERNAME_PATTERN = /^[a-z0-9_-]+$/;
+
+router.get("/check-username", lookupLimiter, async (req, res) => {
   const username = String(req.query.username ?? "").trim().toLowerCase();
-  if (!username) {
-    res.status(400).json({ error: "username is required" });
+  if (!username || username.length > USERNAME_MAX_LENGTH) {
+    res.status(400).json({ error: "username is required and must be ≤24 characters" });
     return;
   }
   try {
@@ -267,12 +354,15 @@ router.get("/check-username", async (req, res) => {
   }
 });
 
-const USERNAME_PATTERN = /^[a-z0-9_-]+$/;
-
 router.post("/register", authLimiter, async (req, res) => {
   const body = RegisterPlayerBody.parse(req.body);
   const username = body.username.trim().toLowerCase();
   const { password } = body;
+
+  if (username.length > USERNAME_MAX_LENGTH) {
+    res.status(400).json({ error: `Username must be ${USERNAME_MAX_LENGTH} characters or fewer.`, code: "INVALID_USERNAME" });
+    return;
+  }
 
   if (!USERNAME_PATTERN.test(username)) {
     res.status(400).json({ error: "Username may only contain letters, numbers, _ and -.", code: "INVALID_USERNAME" });
@@ -328,20 +418,16 @@ router.post("/login", authLimiter, async (req, res) => {
       .where(eq(playersTable.username, username))
       .limit(1);
 
-    if (rows.length === 0) {
-      // Use a generic message to avoid leaking whether username exists
+    // Always run bcrypt.compare to equalise response time and prevent username enumeration
+    const hashToCompare = rows[0]?.passwordHash ?? DUMMY_HASH;
+    const passwordMatch = await bcrypt.compare(password, hashToCompare);
+
+    if (rows.length === 0 || !passwordMatch) {
       res.status(401).json({ error: "Invalid username or password.", code: "INVALID_CREDENTIALS" });
       return;
     }
 
-    const player = rows[0];
-    const passwordMatch = await bcrypt.compare(password, player.passwordHash);
-
-    if (!passwordMatch) {
-      res.status(401).json({ error: "Invalid username or password.", code: "INVALID_CREDENTIALS" });
-      return;
-    }
-
+    const player = rows[0]!;
     const data = LoginPlayerResponse.parse({ sessionId: player.sessionId, username: player.username, isNewPlayer: false });
     res.json(data);
   } catch (err) {
@@ -350,11 +436,10 @@ router.post("/login", authLimiter, async (req, res) => {
   }
 });
 
-router.get("/leaderboard", async (req, res) => {
+router.get("/leaderboard", readLimiter, async (req, res) => {
   try {
     const rows = await db
       .select({
-        sessionId: sessionsTable.sessionId,
         scenario: sessionsTable.scenario,
         day: sessionsTable.day,
         wins: sessionsTable.wins,
@@ -376,7 +461,6 @@ router.get("/leaderboard", async (req, res) => {
         maxStreak?: number;
       };
       return {
-        sessionId: row.sessionId,
         username: row.username ?? null,
         scenario: row.scenario,
         day: row.day,
