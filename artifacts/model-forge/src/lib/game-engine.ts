@@ -399,14 +399,19 @@ export function getEventForDay(state: GameState): GameEvent | null {
           id: "B",
           label: "Add temporal consistency validation to the training pipeline",
           effect: (s) => {
+            // Temporal validation detects the trust-building pattern (small legitimate bursts before large charges)
+            // and relabels those transactions correctly as fraud. The model now trains on the actual fraud pattern
+            // it was blind to — Fraud Recall improves alongside precision because the poisoned 'legitimate' labels
+            // are corrected, restoring the model's ability to identify the fraud ring's signature sequence.
             s.metrics.precision += 8;
+            s.metrics.recall += 4;
             s.metrics.skew = "Low";
             s.metrics.inferenceCost += 3;
           },
         },
         {
           id: "C",
-          label: "Raise fraud detection threshold to flag more transactions",
+          label: "Raise fraud detection threshold — flag only high-confidence fraud",
           effect: (s) => {
             s.metrics.precision += 10;
             s.metrics.recall -= 12;
@@ -1131,13 +1136,26 @@ export function getEventForDay(state: GameState): GameEvent | null {
           id: "C",
           label: "Accept noise — 8% is within industry tolerance",
           effect: (s) => {
-            // Label noise above ~5% compounds into systematic bias over subsequent retraining cycles
-            s.futureEffects.push({
-              triggerDay: s.day + 3,
-              metric: "precision",
-              delta: -6,
-              message: "Label noise compounded into systematic bias — precision degraded faster than passive drift alone",
-            });
+            // Label noise above ~5% compounds into systematic bias over subsequent retraining cycles.
+            // Two directions of error: (1) legitimate transactions mislabeled as fraud → model over-learns
+            // false-positive patterns → precision degrades (dominant direction in skewed fraud datasets where
+            // legitimate transactions outnumber fraud ~50:1). (2) fraudulent transactions mislabeled as
+            // legitimate → model fails to learn those fraud patterns → recall degrades (smaller effect due to
+            // minority class, but real — fraud rings specifically craft transactions to be mislabeled).
+            s.futureEffects.push(
+              {
+                triggerDay: s.day + 3,
+                metric: "precision",
+                delta: -6,
+                message: "Label noise compounded into systematic bias — false-positive patterns reinforced, precision degraded faster than passive drift alone",
+              },
+              {
+                triggerDay: s.day + 3,
+                metric: "recall",
+                delta: -2,
+                message: "Label noise caused the model to under-learn genuine fraud patterns — Fraud Recall quietly eroded as mislabeled fraud cases became blind spots",
+              }
+            );
           },
         },
       ],
