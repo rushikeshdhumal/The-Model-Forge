@@ -1615,7 +1615,7 @@ export default function Game() {
 
           {/* ── MOBILE LAYOUT (hidden on md+) ── */}
           <div className="md:hidden space-y-2">
-            {/* Row 1: Title + Day counter + theme */}
+            {/* Row 1: Title + Day counter + Sign In + theme */}
             <div className="flex items-center justify-between gap-2">
               <div>
                 <h1 className="text-lg font-bold text-primary tracking-tighter leading-none">
@@ -1637,77 +1637,6 @@ export default function Game() {
                     🔥{gameState.streak}
                   </Badge>
                 )}
-                <button
-                  onClick={toggleTheme}
-                  aria-label={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
-                  className="text-[11px] text-muted-foreground/70 border border-border/40 px-1.5 py-0.5 hover:border-primary/40 hover:text-primary transition-colors"
-                >
-                  {theme === "dark" ? "☀" : "◗"}
-                </button>
-              </div>
-            </div>
-
-            {/* Row 2: Scenario + Level selects */}
-            <div className="flex gap-2">
-              <Select value={gameState.scenario} onValueChange={handleScenarioChange}>
-                <SelectTrigger className="flex-1 text-xs h-8" data-testid="select-scenario">
-                  <SelectValue placeholder="Scenario" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="default">Default</SelectItem>
-                  <SelectItem value="zillow">Zillow (Overfitting)</SelectItem>
-                  <SelectItem value="amazon">Amazon (Bias)</SelectItem>
-                  <SelectItem value="uber">Uber (Latency)</SelectItem>
-                  <SelectItem value="netflix">Netflix (Drift)</SelectItem>
-                  <SelectItem value="google">Google (Drift)</SelectItem>
-                  <SelectItem value="stripe">Stripe (Poisoning)</SelectItem>
-                </SelectContent>
-              </Select>
-              <Select value={gameState.userLevel} onValueChange={handleLevelChange}>
-                <SelectTrigger className="flex-1 text-xs h-8" data-testid="select-level">
-                  <SelectValue placeholder="Level" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="intern">Intern</SelectItem>
-                  <SelectItem value="engineer">ML Engineer</SelectItem>
-                  <SelectItem value="mlops">MLOps Lead</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            {/* Row 3: Action buttons + player */}
-            <div className="flex items-center gap-1.5 flex-wrap">
-              {playerName ? (
-                <button
-                  onClick={() => { setAuthMode("login"); setAuthUsername(""); setAuthPassword(""); setAuthConfirm(""); setAuthError(""); setShowIdentity(true); }}
-                  className="text-[10px] text-primary/70 border border-primary/25 px-1.5 py-0.5 tracking-widest hover:border-primary/50 hover:text-primary transition-colors"
-                  title="Switch account"
-                >
-                  {playerName.toUpperCase()}
-                </button>
-              ) : (
-                <button
-                  onClick={() => { setAuthMode("login"); setAuthUsername(""); setAuthPassword(""); setAuthConfirm(""); setAuthError(""); setShowIdentity(true); }}
-                  className="text-[10px] text-muted-foreground/60 border border-border/30 px-1.5 py-0.5 tracking-widest hover:border-primary/40 hover:text-primary/70 transition-colors"
-                >
-                  SIGN IN
-                </button>
-              )}
-              <Button variant="outline" size="sm" className="text-primary/70 border-primary/30 hover:bg-primary/10 hover:text-primary text-[10px] h-6 px-2" onClick={() => setShowCodex(true)} data-testid="button-codex">CODEX</Button>
-              <Button variant="outline" size="sm" className="text-primary/70 border-primary/30 hover:bg-primary/10 hover:text-primary text-[10px] h-6 px-2" onClick={() => { setShowSave(true); setRestoreInput(""); setRestoreError(""); setCodeCopied(false); }} data-testid="button-save">SAVE</Button>
-              <Button variant="outline" size="sm" className="text-primary/70 border-primary/30 hover:bg-primary/10 hover:text-primary text-[10px] h-6 px-2" onClick={() => setShowLeaderboard(true)} data-testid="button-leaderboard">SCORES</Button>
-              <Button variant="outline" size="sm" className="text-destructive border-destructive/40 hover:bg-destructive/10 text-[10px] h-6 px-2" onClick={() => setShowReset(true)} data-testid="button-reset">RESET</Button>
-            </div>
-          </div>
-
-          {/* ── DESKTOP LAYOUT (hidden below md) ── */}
-          <div className="hidden md:flex items-center justify-between gap-3">
-            <div>
-              <h1 className="text-2xl md:text-3xl font-bold text-primary tracking-tighter leading-none">
-                THE MODEL FORGE<span className="animate-pulse ml-0.5" aria-hidden="true">_</span>
-              </h1>
-              <div className="flex items-center gap-2 mt-0.5">
-                <p className="text-xs text-muted-foreground tracking-widest">ML PRODUCTION SIMULATOR</p>
                 {playerName ? (
                   <button
                     onClick={() => { setAuthMode("login"); setAuthUsername(""); setAuthPassword(""); setAuthConfirm(""); setAuthError(""); setShowIdentity(true); }}
@@ -1719,13 +1648,77 @@ export default function Game() {
                 ) : (
                   <button
                     onClick={() => { setAuthMode("login"); setAuthUsername(""); setAuthPassword(""); setAuthConfirm(""); setAuthError(""); setShowIdentity(true); }}
-                    className="text-[10px] text-muted-foreground/60 border border-border/30 px-1.5 py-0.5 tracking-widest hover:border-primary/40 hover:text-primary/70 transition-colors"
+                    className="text-[10px] font-semibold text-primary border border-primary/50 px-1.5 py-0.5 tracking-widest hover:bg-primary/10 transition-colors"
+                    title="Sign in to save your scores to the leaderboard"
                   >
                     SIGN IN
                   </button>
                 )}
+                <button
+                  onClick={toggleTheme}
+                  aria-label={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
+                  title={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
+                  className="text-[11px] text-muted-foreground/70 border border-border/40 px-1.5 py-0.5 hover:border-primary/40 hover:text-primary transition-colors"
+                >
+                  {theme === "dark" ? "☀" : "◗"}
+                </button>
               </div>
             </div>
+
+            {/* Row 2: Scenario + Role selects with labels */}
+            <div className="flex gap-2">
+              <div className="flex-1 flex flex-col gap-0.5">
+                <span className="text-[9px] text-muted-foreground/60 tracking-widest px-0.5">SCENARIO — choose an ML incident</span>
+                <Select value={gameState.scenario} onValueChange={handleScenarioChange}>
+                  <SelectTrigger className="w-full text-xs h-8" data-testid="select-scenario">
+                    <SelectValue placeholder="Scenario" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="default">Default</SelectItem>
+                    <SelectItem value="zillow">Zillow (Overfitting)</SelectItem>
+                    <SelectItem value="amazon">Amazon (Bias)</SelectItem>
+                    <SelectItem value="uber">Uber (Latency)</SelectItem>
+                    <SelectItem value="netflix">Netflix (Drift)</SelectItem>
+                    <SelectItem value="google">Google (Drift)</SelectItem>
+                    <SelectItem value="stripe">Stripe (Poisoning)</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="flex-1 flex flex-col gap-0.5">
+                <span className="text-[9px] text-muted-foreground/60 tracking-widest px-0.5">ROLE — sets difficulty</span>
+                <Select value={gameState.userLevel} onValueChange={handleLevelChange}>
+                  <SelectTrigger className="w-full text-xs h-8" data-testid="select-level">
+                    <SelectValue placeholder="Level" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="intern">Intern</SelectItem>
+                    <SelectItem value="engineer">ML Engineer</SelectItem>
+                    <SelectItem value="mlops">MLOps Lead</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            {/* Row 3: Action buttons */}
+            <div className="flex items-center gap-1.5 flex-wrap">
+              <Button variant="outline" size="sm" className="text-primary/70 border-primary/30 hover:bg-primary/10 hover:text-primary text-[10px] h-6 px-2" onClick={() => setShowCodex(true)} data-testid="button-codex" title="Browse the ML incident knowledge base">CODEX</Button>
+              <Button variant="outline" size="sm" className="text-primary/70 border-primary/30 hover:bg-primary/10 hover:text-primary text-[10px] h-6 px-2" onClick={() => { setShowSave(true); setRestoreInput(""); setRestoreError(""); setCodeCopied(false); }} data-testid="button-save" title="Save or restore your game progress">SAVE</Button>
+              <Button variant="outline" size="sm" className="text-primary/70 border-primary/30 hover:bg-primary/10 hover:text-primary text-[10px] h-6 px-2" onClick={() => setShowLeaderboard(true)} data-testid="button-leaderboard" title="View the global leaderboard">SCORES</Button>
+              <Button variant="outline" size="sm" className="text-destructive border-destructive/40 hover:bg-destructive/10 text-[10px] h-6 px-2" onClick={() => setShowReset(true)} data-testid="button-reset" title="Abandon the current run and start over">RESET</Button>
+            </div>
+          </div>
+
+          {/* ── DESKTOP LAYOUT (hidden below md) ── */}
+          <div className="hidden md:flex items-center justify-between gap-3">
+            {/* Branding — no sign-in here */}
+            <div>
+              <h1 className="text-2xl md:text-3xl font-bold text-primary tracking-tighter leading-none">
+                THE MODEL FORGE<span className="animate-pulse ml-0.5" aria-hidden="true">_</span>
+              </h1>
+              <p className="text-xs text-muted-foreground tracking-widest mt-0.5">ML PRODUCTION SIMULATOR</p>
+            </div>
+
+            {/* Controls — right side */}
             <div className="flex flex-wrap items-center gap-2 md:gap-3">
               <div data-testid="day-counter" className="text-xl font-bold border border-primary/40 px-3 py-1 text-primary">
                 DAY {gameState.day}/14
@@ -1743,37 +1736,69 @@ export default function Game() {
                   🔥 {gameState.streak}d streak
                 </Badge>
               )}
-              <Select value={gameState.scenario} onValueChange={handleScenarioChange}>
-                <SelectTrigger className="w-[160px] text-xs" data-testid="select-scenario">
-                  <SelectValue placeholder="Scenario" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="default">Default</SelectItem>
-                  <SelectItem value="zillow">Zillow (Overfitting)</SelectItem>
-                  <SelectItem value="amazon">Amazon (Bias)</SelectItem>
-                  <SelectItem value="uber">Uber (Latency)</SelectItem>
-                  <SelectItem value="netflix">Netflix (Drift)</SelectItem>
-                  <SelectItem value="google">Google (Drift)</SelectItem>
-                  <SelectItem value="stripe">Stripe (Poisoning)</SelectItem>
-                </SelectContent>
-              </Select>
-              <Select value={gameState.userLevel} onValueChange={handleLevelChange}>
-                <SelectTrigger className="w-[130px] text-xs" data-testid="select-level">
-                  <SelectValue placeholder="Level" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="intern">Intern</SelectItem>
-                  <SelectItem value="engineer">ML Engineer</SelectItem>
-                  <SelectItem value="mlops">MLOps Lead</SelectItem>
-                </SelectContent>
-              </Select>
-              <Button variant="outline" size="sm" className="text-primary/70 border-primary/30 hover:bg-primary/10 hover:text-primary text-xs" onClick={() => { setShowSave(true); setRestoreInput(""); setRestoreError(""); setCodeCopied(false); }} data-testid="button-save">SAVE</Button>
-              <Button variant="outline" size="sm" className="text-primary/70 border-primary/30 hover:bg-primary/10 hover:text-primary text-xs" onClick={() => setShowCodex(true)} data-testid="button-codex">CODEX</Button>
-              <Button variant="outline" size="sm" className="text-primary/70 border-primary/30 hover:bg-primary/10 hover:text-primary text-xs" onClick={() => setShowLeaderboard(true)} data-testid="button-leaderboard">SCORES</Button>
-              <Button variant="outline" size="sm" className="text-destructive border-destructive/40 hover:bg-destructive/10 text-xs" onClick={() => setShowReset(true)} data-testid="button-reset">RESET</Button>
-              <button onClick={toggleTheme} aria-label={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"} className="text-[11px] text-muted-foreground/70 border border-border/40 px-2 py-1 tracking-widest hover:border-primary/40 hover:text-primary transition-colors">
+
+              {/* Scenario select with label */}
+              <div className="flex flex-col gap-0.5">
+                <span className="text-[9px] text-muted-foreground/60 tracking-widest px-0.5">SCENARIO</span>
+                <Select value={gameState.scenario} onValueChange={handleScenarioChange}>
+                  <SelectTrigger className="w-[160px] text-xs" data-testid="select-scenario">
+                    <SelectValue placeholder="Scenario" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="default">Default</SelectItem>
+                    <SelectItem value="zillow">Zillow (Overfitting)</SelectItem>
+                    <SelectItem value="amazon">Amazon (Bias)</SelectItem>
+                    <SelectItem value="uber">Uber (Latency)</SelectItem>
+                    <SelectItem value="netflix">Netflix (Drift)</SelectItem>
+                    <SelectItem value="google">Google (Drift)</SelectItem>
+                    <SelectItem value="stripe">Stripe (Poisoning)</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* Role select with label */}
+              <div className="flex flex-col gap-0.5">
+                <span className="text-[9px] text-muted-foreground/60 tracking-widest px-0.5">ROLE / DIFFICULTY</span>
+                <Select value={gameState.userLevel} onValueChange={handleLevelChange}>
+                  <SelectTrigger className="w-[130px] text-xs" data-testid="select-level">
+                    <SelectValue placeholder="Level" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="intern">Intern</SelectItem>
+                    <SelectItem value="engineer">ML Engineer</SelectItem>
+                    <SelectItem value="mlops">MLOps Lead</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <Button variant="outline" size="sm" className="text-primary/70 border-primary/30 hover:bg-primary/10 hover:text-primary text-xs" onClick={() => { setShowSave(true); setRestoreInput(""); setRestoreError(""); setCodeCopied(false); }} data-testid="button-save" title="Save or restore your game progress">SAVE</Button>
+              <Button variant="outline" size="sm" className="text-primary/70 border-primary/30 hover:bg-primary/10 hover:text-primary text-xs" onClick={() => setShowCodex(true)} data-testid="button-codex" title="Browse the ML incident knowledge base">CODEX</Button>
+              <Button variant="outline" size="sm" className="text-primary/70 border-primary/30 hover:bg-primary/10 hover:text-primary text-xs" onClick={() => setShowLeaderboard(true)} data-testid="button-leaderboard" title="View the global leaderboard">SCORES</Button>
+              <Button variant="outline" size="sm" className="text-destructive border-destructive/40 hover:bg-destructive/10 text-xs" onClick={() => setShowReset(true)} data-testid="button-reset" title="Abandon the current run and start over">RESET</Button>
+              <button onClick={toggleTheme} aria-label={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"} title={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"} className="text-[11px] text-muted-foreground/70 border border-border/40 px-2 py-1 tracking-widest hover:border-primary/40 hover:text-primary transition-colors">
                 {theme === "dark" ? "☀" : "◗"}
               </button>
+
+              {/* Sign In — top-right, visually separated */}
+              <div className="border-l border-border/50 pl-3 ml-0.5">
+                {playerName ? (
+                  <button
+                    onClick={() => { setAuthMode("login"); setAuthUsername(""); setAuthPassword(""); setAuthConfirm(""); setAuthError(""); setShowIdentity(true); }}
+                    className="text-[10px] text-primary/70 border border-primary/25 px-2 py-1 tracking-widest hover:border-primary/50 hover:text-primary transition-colors"
+                    title="Switch account"
+                  >
+                    {playerName.toUpperCase()}
+                  </button>
+                ) : (
+                  <button
+                    onClick={() => { setAuthMode("login"); setAuthUsername(""); setAuthPassword(""); setAuthConfirm(""); setAuthError(""); setShowIdentity(true); }}
+                    className="text-xs font-semibold text-primary border border-primary/50 px-3 py-1 tracking-widest hover:bg-primary/10 transition-colors"
+                    title="Sign in to save your scores to the leaderboard"
+                  >
+                    SIGN IN
+                  </button>
+                )}
+              </div>
             </div>
           </div>
 
