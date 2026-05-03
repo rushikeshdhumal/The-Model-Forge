@@ -2450,7 +2450,7 @@ export default function Game() {
               </div>
             ) : (
               <div className="overflow-x-auto -mx-1 px-1">
-              <div className="space-y-0 min-w-[480px]">
+                <div className="space-y-0 min-w-[480px]">
                 {/* Header row */}
                 <div className="grid grid-cols-[2rem_1fr_5rem_3rem_4rem_3.5rem_3.5rem] gap-2 text-[10px] tracking-widest text-muted-foreground border-b border-border/40 pb-2 mb-1">
                   <span>#</span>
