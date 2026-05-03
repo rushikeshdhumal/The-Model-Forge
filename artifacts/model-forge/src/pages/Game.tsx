@@ -706,9 +706,9 @@ const CODEX_SCENARIO_DIFFICULTY = [
     signatureEvent: {
       day: 5,
       name: "LLM CONTENT FLOOD — QUALITY SIGNALS COLLAPSE",
-      insight: "LLM-generated spam is overwhelming your quality classifiers. Choice A (emergency retrain) fixes quality immediately. Choice B (ensemble with LLM-pattern detector) gives precision+7 and recall+5 — the most balanced outcome. Choice C schedules −8 NDCG the next day and −8 MAP recall on Day 8.",
+      insight: "LLM-generated spam is overwhelming your quality classifiers. Choice A (train dedicated LLM-content classifier) gives NDCG Index+12 and MAP Index+6 immediately — the strongest gain — but costs +15 inference overhead. Choice B (ensemble with LLM-pattern detector) gives NDCG+7 and MAP+5 at only +8 cost — the most balanced outcome. Choice C schedules −8 NDCG Index during Day 6's resolution and −8 MAP Index during Day 8's resolution.",
     },
-    scoringTrap: "Unlike Netflix drift (which manifests slowly), the LLM flood cascade lands hard and fast. Players who choose 'wait and see' see −8 NDCG the very next day — often triggering the low_accuracy event on Day 6 when metrics were already under passive decay pressure.",
+    scoringTrap: "Unlike Netflix drift (which manifests slowly), the LLM flood cascade lands hard and fast. Players who choose 'wait and see' see the −8 NDCG hit land during Day 6's resolution — and if earlier event choices have already pushed metrics down, CRITICAL: MODEL QUALITY DEGRADED can trigger as early as Day 7.",
   },
   {
     id: "uber",
