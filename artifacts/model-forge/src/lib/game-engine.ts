@@ -83,8 +83,14 @@ function advanceDay(s: GameState): GameState {
   s.metrics.slaAdherence = Math.max(0, s.metrics.slaAdherence - 0.5);
 
   if (s.ciCd.autoRetrain) {
-    s.metrics.precision = Math.min(100, s.metrics.precision + 2);
-    s.metrics.recall = Math.min(100, s.metrics.recall + 1);
+    // CI/CD retraining counters drift but has diminishing returns above 85% — data distribution
+    // coverage saturates and further gains require fundamentally new data, not more retrains.
+    if (s.metrics.precision < 85) {
+      s.metrics.precision = Math.min(85, s.metrics.precision + 2);
+    }
+    if (s.metrics.recall < 85) {
+      s.metrics.recall = Math.min(85, s.metrics.recall + 1);
+    }
     // Retraining runs consume compute — reflected in cost index
     s.metrics.inferenceCost = Math.min(100, s.metrics.inferenceCost + 2);
   }
@@ -156,8 +162,7 @@ export function getEventForDay(state: GameState): GameEvent | null {
           id: "A",
           label: "Apply L2 regularization and retrain on recent market data",
           effect: (s) => {
-            s.metrics.precision -= 8;
-            s.metrics.recall += 5;
+            s.metrics.precision -= 3;
             s.metrics.skew = "Low";
             s.registry.models.push({
               id: "model_v2",
@@ -207,7 +212,7 @@ export function getEventForDay(state: GameState): GameEvent | null {
       eventType: "overfitting",
       title: "EDGE CASE COLLAPSE: RARE ROAD EVENTS",
       description:
-        "Average-case accuracy is 99.1% — but the model catastrophically fails on stationary emergency vehicles and unusual road markings. Recall on rare-class events has silently degraded in production.",
+        "Average-case accuracy is 99.1% — but the model catastrophically fails on stationary emergency vehicles left in lanes, unusual road markings, and pedestrians in low-visibility conditions. Recall on rare-class events has silently degraded in production.",
       choices: [
         {
           id: "A",
@@ -274,8 +279,6 @@ export function getEventForDay(state: GameState): GameEvent | null {
           label: "Add adversarial input filter and content validation layer",
           effect: (s) => {
             s.metrics.precision += 8;
-            s.featureStore.enabled = true;
-            s.metrics.featureStaleness = 1;
             s.metrics.skew = "Low";
           },
         },
@@ -306,10 +309,9 @@ export function getEventForDay(state: GameState): GameEvent | null {
           id: "A",
           label: "Deploy velocity anomaly detection on transaction sequences",
           effect: (s) => {
-            s.featureStore.enabled = true;
-            s.metrics.featureStaleness = 1;
             s.metrics.skew = "Low";
             s.metrics.precision += 5;
+            s.metrics.recall += 3;
           },
         },
         {
@@ -888,7 +890,9 @@ export function getEventForDay(state: GameState): GameEvent | null {
     },
   ];
 
-  return pool[d % pool.length];
+  // Vary by both day and scenario so identical days across different scenarios draw different events.
+  const scenarioHash = [...sc].reduce((acc, ch) => acc + ch.charCodeAt(0), 0);
+  return pool[(d * 7 + scenarioHash * 3) % pool.length];
 }
 
 // ---- Scenario Briefs ----
@@ -983,10 +987,10 @@ export const SCENARIO_BRIEFS: Record<string, ScenarioBrief> = {
     whatHappened:
       "Uber's real-time surge pricing Neural Network had a hard SLA of 100ms. During a city-wide event in Sydney, traffic spiked 4x. P99 latency hit 180ms, violating driver and rider SLAs. The fallback was a static surge multiplier — losing millions in dynamic pricing revenue because no pre-warmed simpler model was ready.",
     keyRisk:
-      "On Day 3, a 4x traffic spike will push your Neural Network past the latency SLA. Falling back to XGBoost restores speed but costs accuracy; scaling the cluster doubles infra cost.",
+      "On Day 3, a 4x traffic spike will push your Neural Network past the latency SLA. The team recently migrated from LightGBM to a Neural Network for accuracy gains — but under load the P99 cost is now visible. Falling back to XGBoost restores speed; scaling the cluster doubles infra cost.",
     lesson:
       "Real-time ML systems need latency budgets, not just accuracy targets. Load testing, pre-warmed fallback models, and autoscaling are engineering requirements — not nice-to-haves.",
-    startingHandicap: "SLA Adherence starts at 92% — the system is already under mild background load pressure from city traffic patterns.",
+    startingHandicap: "SLA Adherence starts at 92% — the recently deployed Neural Network (migrated from LightGBM for accuracy) is already under mild background load pressure from city traffic patterns.",
     problemType: "regression",
     metricLabels: { precision: "Demand Index", recall: "Surge Coverage" },
     briefLabels: { precision: "DMND", recall: "SRGE" },
@@ -1015,11 +1019,11 @@ export const SCENARIO_BRIEFS: Record<string, ScenarioBrief> = {
     title: "Tesla Autopilot: Edge Case Collapse",
     tagline: "99.9% accuracy. Not enough.",
     whatHappened:
-      "Tesla's Autopilot computer vision model showed high average accuracy — but catastrophically failed on rare edge cases: stationary emergency vehicles, unusual road markings, and adversarial conditions. Optimizing for average-case mAP on common highway scenarios made the model brittle on the long tail of rare events that matter most for safety.",
+      "Tesla's Autopilot computer vision model showed high average accuracy — but catastrophically failed on rare edge cases: stationary emergency vehicles left in live lanes, unusual temporary road markings, and pedestrians in low-visibility conditions. Optimizing for average-case mAP on common highway scenarios made the model brittle on the long tail of rare events that matter most for safety.",
     keyRisk:
-      "On Day 3, rare-class recall failures surface in production. The fix requires targeted training on synthetic edge-case data or a rule-based ensemble — not just retraining on more of the same distribution.",
+      "On Day 3, rare-class recall failures surface in production. The fix requires targeted training on synthetic edge-case data or a rule-based ensemble — not just retraining on more of the same distribution. NHTSA's documented investigations of Autopilot focused on failure to respond to stationary objects and stop/signal violations.",
     lesson:
-      "Safety-critical computer vision systems cannot optimize only for average-case accuracy. Tail risk and rare events require specific evaluation sets, dedicated training data, and targeted coverage constraints.",
+      "Safety-critical computer vision systems cannot optimize only for average-case accuracy. Tail risk and rare events require specific evaluation sets, dedicated training data, and targeted coverage constraints. A 99.1% average-case mAP can still mean catastrophic failure on the rare classes that cause fatalities.",
     startingHandicap: "Rare-class detection recall starts at 72% — the model is already missing a significant portion of rare road-event classes in production.",
     problemType: "classification",
     metricLabels: { precision: "Detection Precision", recall: "Detection Recall" },
@@ -1049,9 +1053,9 @@ export const SCENARIO_BRIEFS: Record<string, ScenarioBrief> = {
     title: "Facebook Real-Time Inference: The Cascade",
     tagline: "One service failed. Everything failed.",
     whatHappened:
-      "Facebook's 2021 outage began with a BGP routing misconfiguration that made the ML serving infrastructure unreachable. The real-time ranking models had no graceful degradation path — no pre-warmed fallback model in staging, no circuit breakers. Six hours of complete downtime followed because the system had never been tested without the main model.",
+      "Facebook's 2021 outage began with a BGP routing misconfiguration that took all of Facebook's infrastructure offline — WhatsApp, Instagram, internal tooling, and critically, the entire ML serving layer. No service was spared. The ML consequence was severe: real-time News Feed ranking had no graceful degradation path. With no pre-warmed fallback model and no circuit breakers, ranking was absent for 6 hours.",
     keyRisk:
-      "On Day 3, a BGP routing failure will take your serving cluster offline. With no fallback model in staging, you must choose between deploying an untested heuristic, serving cached predictions, or waiting — each with major SLA consequences.",
+      "On Day 3, a BGP routing failure will make your serving cluster unreachable. With no fallback model in staging, you must choose between deploying an untested heuristic, serving cached predictions, or waiting for recovery — each with major SLA consequences.",
     lesson:
       "Every ML system needs a simpler, cheaper fallback that has been battle-tested in production. Circuit breakers and graceful degradation are as important as the main model.",
     startingHandicap: "SLA Adherence starts at 90% — the infrastructure is already under mild stress from background load on the serving cluster.",

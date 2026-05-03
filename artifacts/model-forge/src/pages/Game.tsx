@@ -439,9 +439,9 @@ function getCodexMetrics(scenario: string) {
       ],
     },
     google: {
-      definition: "Mean Average Precision — the mean of Average Precision scores computed across all queries. For each query, AP averages Precision@K at every rank position where a relevant document appears. MAP rewards models that not only find relevant documents but surface them early and find all of them.",
+      definition: "Mean Average Precision — the mean of Average Precision scores computed across all queries. MAP serves as the recall-analog in this ranking context: it penalizes models that miss relevant documents anywhere in the result set, even if the top positions look good. A model that finds only 60% of relevant documents scores at most 0.6 MAP regardless of how well it orders them.",
       formula: "MAP = (1/|Q|) × Σ_q AP(q); AP(q) = Σ_k (P@k × rel_k) / |relevant_q|",
-      whyItMatters: "Low MAP means niche and expert queries return incomplete, poorly-ordered results — the gaps competitors fill. MAP captures both ordering quality and completeness: a model that finds all relevant documents but buries them scores lower than one that surfaces them early. At Google scale, a 1% MAP drop on the long tail is billions of underserved queries.",
+      whyItMatters: "Low MAP means niche and expert queries return incomplete results — the gaps competitors fill. Unlike NDCG alone, MAP catches models that rank the top results well but abandon coverage below rank 5. At Google scale, a 1% MAP drop on the long tail is billions of queries that surface only a fraction of genuinely relevant content.",
       causes: [
         "Index freshness issues — newly published relevant content not yet crawled",
         "Ranking bias toward high-PageRank domains over genuinely relevant smaller sources",
