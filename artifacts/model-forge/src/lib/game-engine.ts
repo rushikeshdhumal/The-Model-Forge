@@ -1042,12 +1042,250 @@ export function getEventForDay(state: GameState): GameEvent | null {
         } },
       ],
     },
+    // ---- New events (indices 8-13) ---- expanding pool to 14 so 13 draws/run are all unique
+    {
+      id: "rand_label_errors",
+      eventType: "random",
+      title: "TRAINING DATA AUDIT: LABEL ERRORS FOUND",
+      description:
+        "A spot check of 500 training samples revealed 8% were mislabeled — wrong ground-truth attached to real inference outputs. The model has been learning from corrupted signal for the past training cycle.",
+      choices: [
+        {
+          id: "A",
+          label: "Relabel affected samples and retrain",
+          effect: (s) => {
+            // Full relabeling + retrain recovers both signal classes — precision and recall both improve
+            s.metrics.precision += 7;
+            s.metrics.recall += 5;
+            s.metrics.inferenceCost += 8;
+          },
+        },
+        {
+          id: "B",
+          label: "Filter uncertain labels, retrain on cleaner smaller set",
+          effect: (s) => {
+            // Cleaner labels improve precision, but fewer training samples reduce recall coverage
+            s.metrics.precision += 10;
+            s.metrics.recall -= 5;
+            s.metrics.inferenceCost += 5;
+          },
+        },
+        {
+          id: "C",
+          label: "Accept noise — 8% is within industry tolerance",
+          effect: (s) => {
+            // Label noise above ~5% compounds into systematic bias over subsequent retraining cycles
+            s.futureEffects.push({
+              triggerDay: s.day + 3,
+              metric: "precision",
+              delta: -6,
+              message: "Label noise compounded into systematic bias — precision degraded faster than passive drift alone",
+            });
+          },
+        },
+      ],
+    },
+    {
+      id: "rand_output_drift",
+      eventType: "random",
+      title: "PREDICTION DISTRIBUTION SHIFT",
+      description:
+        "Real-time monitoring shows the model's positive prediction rate increased 40% week-over-week with no corresponding change in actual event rates. Output distribution has shifted independently of input features.",
+      choices: [
+        {
+          id: "A",
+          label: "Recalibrate model confidence and re-tune decision threshold",
+          effect: (s) => {
+            // Threshold recalibration corrects for the shifted output distribution — precision improves
+            s.metrics.precision += 6;
+            s.metrics.inferenceCost += 3;
+          },
+        },
+        {
+          id: "B",
+          label: "Trigger full retraining pipeline on latest labeled data",
+          effect: (s) => {
+            // Full retrain realigns the model with current data distribution — both metrics improve
+            s.metrics.precision += 4;
+            s.metrics.recall += 8;
+            s.metrics.inferenceCost += 10;
+          },
+        },
+        {
+          id: "C",
+          label: "Silence alert — output shifts can reflect seasonal variation",
+          effect: (s) => {
+            // Unaddressed output drift cascades into degraded precision as false positives accumulate
+            s.futureEffects.push({
+              triggerDay: s.day + 3,
+              metric: "precision",
+              delta: -8,
+              message: "Ignored prediction drift compounded — output distribution diverged further from ground truth",
+            });
+          },
+        },
+      ],
+    },
+    {
+      id: "rand_batch_timeout",
+      eventType: "random",
+      title: "BATCH SCORING JOB TIMED OUT",
+      description:
+        "Nightly batch inference job timed out at 78% completion. 22% of tomorrow's prediction cache is missing. Those requests will fall back to real-time inference (costly) or serve stale predictions.",
+      choices: [
+        {
+          id: "A",
+          label: "Extend timeout window and rerun batch job",
+          effect: (s) => {
+            // Rerunning extends compute cost and delays feature ingest — staleness accrues during the wait
+            s.metrics.inferenceCost += 10;
+            s.metrics.featureStaleness += 4;
+          },
+        },
+        {
+          id: "B",
+          label: "Serve partial batch — accept 22% cache miss",
+          effect: (s) => {
+            // Missing 22% of the prediction cache means those requests fail or get default responses
+            s.metrics.slaAdherence -= 12;
+          },
+        },
+        {
+          id: "C",
+          label: "Fall back to rule-based heuristics for uncached requests",
+          effect: (s) => {
+            // Rules are less accurate than the ML model — precision degrades; SLA only partially preserved
+            s.metrics.slaAdherence -= 6;
+            s.metrics.precision -= 4;
+          },
+        },
+      ],
+    },
+    {
+      id: "rand_vendor_outage",
+      eventType: "random",
+      title: "VENDOR ENRICHMENT API OUTAGE",
+      description:
+        "External API providing 3 of your top-10 features by importance has been unreachable for 90 minutes. Inference is currently using stale cached enrichment values from before the outage began.",
+      choices: [
+        {
+          id: "A",
+          label: "Switch to backup vendor — accepts 10-minute migration",
+          effect: (s) => {
+            // Migration lag means features go stale before the backup starts serving
+            s.metrics.inferenceCost += 8;
+            s.metrics.featureStaleness += 6;
+          },
+        },
+        {
+          id: "B",
+          label: "Drop affected features — serve with reduced feature set",
+          effect: (s) => {
+            // Removing 3 important features degrades both precision and recall
+            s.metrics.precision -= 6;
+            s.metrics.recall -= 4;
+          },
+        },
+        {
+          id: "C",
+          label: "Continue with stale cached enrichment values",
+          effect: (s) => {
+            // Prolonged use of stale enrichment widens training-serving skew
+            s.metrics.featureStaleness += 10;
+            if (s.metrics.skew === "Low") s.metrics.skew = "Medium";
+            else if (s.metrics.skew === "Medium") s.metrics.skew = "High";
+          },
+        },
+      ],
+    },
+    {
+      id: "rand_memory_leak",
+      eventType: "random",
+      title: "INFERENCE SERVER MEMORY LEAK",
+      description:
+        "Telemetry shows the inference process memory footprint has grown 3× over 6 hours. OOM-kill risk is elevated. Prediction latency is already 20% above baseline SLA.",
+      choices: [
+        {
+          id: "A",
+          label: "Deploy hotfix, rolling restart inference pods",
+          effect: (s) => {
+            // Brief pod restart causes a temporary SLA dip; once resolved, freed memory reduces overhead cost
+            s.metrics.slaAdherence -= 5;
+            s.metrics.inferenceCost -= 5;
+          },
+        },
+        {
+          id: "B",
+          label: "Scale out horizontally to absorb the leak",
+          effect: (s) => {
+            // More pods absorb the leak but compounds the cost — the root cause is not fixed
+            s.metrics.inferenceCost += 15;
+          },
+        },
+        {
+          id: "C",
+          label: "Monitor — schedule fix in next maintenance window",
+          effect: (s) => {
+            // Leaving a memory leak unaddressed risks OOM-kill cascading across pods
+            s.futureEffects.push({
+              triggerDay: s.day + 2,
+              metric: "slaAdherence",
+              delta: -18,
+              message: "OOM-kill cascaded across inference pods — serving cluster partially down",
+            });
+          },
+        },
+      ],
+    },
+    {
+      id: "rand_feedback_loop",
+      eventType: "random",
+      title: "FEEDBACK LOOP IN TRAINING DATA",
+      description:
+        "Pipeline audit reveals that last quarter's model predictions are appearing as ground-truth labels in this month's retraining dataset. The model has been partially learning from its own outputs — a data leakage feedback loop.",
+      choices: [
+        {
+          id: "A",
+          label: "Scrub contaminated samples and retrain on verified labels only",
+          effect: (s) => {
+            // Clean retrain eliminates the self-reinforcing bias — both metrics recover
+            s.metrics.precision += 6;
+            s.metrics.recall += 5;
+            s.metrics.inferenceCost += 10;
+          },
+        },
+        {
+          id: "B",
+          label: "Apply deduplication filter to label pipeline going forward",
+          effect: (s) => {
+            // Partial fix stops future contamination but doesn't remove already-learned bias
+            s.metrics.precision += 3;
+            s.metrics.inferenceCost += 3;
+          },
+        },
+        {
+          id: "C",
+          label: "Contamination rate below 5% — acceptable for now",
+          effect: (s) => {
+            // Self-reinforcing labels amplify false negatives in subsequent retraining cycles
+            s.futureEffects.push({
+              triggerDay: s.day + 3,
+              metric: "recall",
+              delta: -9,
+              message: "Feedback loop compounded — model increasingly confident in its own past false negatives",
+            });
+          },
+        },
+      ],
+    },
   ];
 
-  // Vary by day, scenario, and cumulative wins so each new playthrough draws a different event sequence.
+  // Pool now has 14 events — one per non-fixed day (days 1-4 and 6-14 = 13 draws).
+  // Multiplier must be coprime to 14 to reach all 14 slots. Using 3 (gcd(3,14)=1).
+  // Multiplier 7 would only produce 2 distinct values mod 14 (gcd(7,14)=7) — never use it.
   const scenarioHash = [...sc].reduce((acc, ch) => acc + ch.charCodeAt(0), 0);
   const runSeed = (state.wins ?? 0) * 13;
-  return pool[(d * 7 + scenarioHash * 3 + runSeed) % pool.length];
+  return pool[(d * 3 + scenarioHash * 3 + runSeed) % pool.length];
 }
 
 // ---- Scenario Briefs ----
