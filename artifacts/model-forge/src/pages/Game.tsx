@@ -198,8 +198,8 @@ function getCodexMetrics(scenario: string) {
       ],
     },
     zillow: {
-      definition: "What percentage of home price estimates fall within ±5% of the final sale price? Accuracy Index measures the model's pricing precision at scale.",
-      formula: "Properties with |estimate − sale_price| < 5% / Total listed",
+      definition: "What percentage of home price estimates fall within ±5% of the final sale price? Accuracy Index measures the model's pricing precision on the predictions it actually makes.",
+      formula: "Properties with |estimate − sale_price| < 5% / Properties with estimates",
       whyItMatters: "Buyers anchor on the Zestimate. Estimates off by >5% systematically distort offers — sellers are underpaid, buyers overbid. Zillow's 2021 iBuying collapse lost $500M directly because this degraded while the model bought homes at scale.",
       causes: [
         "Macro interest rate shifts breaking the price-feature relationship learned at training time",

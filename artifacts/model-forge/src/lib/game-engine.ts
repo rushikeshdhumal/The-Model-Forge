@@ -232,11 +232,19 @@ export function getEventForDay(state: GameState): GameEvent | null {
           id: "A",
           label: "Apply L2 regularization and retrain on recent market data",
           effect: (s) => {
+            // L2 regularization is a hyperparameter change on the existing XGBoost model (reg_lambda),
+            // NOT an architecture switch to linear regression. The model stays XGBoost — but with
+            // penalized large coefficients it generalizes better to property types outside the training
+            // distribution. Precision (Accuracy Index) drops slightly as the model sacrifices some
+            // in-sample accuracy for generalization. Coverage (Coverage Index) gains modestly because
+            // a less-overfit model is willing to estimate properties it was previously too uncertain about.
             s.metrics.precision -= 3;
+            s.metrics.recall += 2;
             s.metrics.skew = "Low";
             s.registry.models.push({
               id: "model_v2",
-              type: "Linear",
+              // L2 regularization applies to the XGBoost objective — architecture does not change
+              type: "XGBoost",
               version: "2.0",
               stage: "staging",
               trainedOnDay: s.day,
@@ -252,13 +260,16 @@ export function getEventForDay(state: GameState): GameEvent | null {
           id: "B",
           label: "Collect 90 days of recent transaction data and schedule retrain",
           effect: (s) => {
+            // 90 days of recent transaction data captures far more diverse property types:
+            // new builds, non-standard lots, thin-market geographies, post-rate-shift comparables.
+            // Precision (Accuracy Index) improves because the model learns current market dynamics.
+            // Coverage (Coverage Index) also improves — with more diverse training examples the model
+            // becomes confident enough to estimate properties it previously abstained from.
             s.metrics.inferenceCost += 5;
-            s.futureEffects.push({
-              triggerDay: s.day + 2,
-              metric: "precision",
-              delta: 12,
-              message: "Fresh-data retrain corrected live error distribution",
-            });
+            s.futureEffects.push(
+              { triggerDay: s.day + 2, metric: "precision", delta: 12, message: "Fresh 90-day retrain corrected live error distribution — Accuracy Index recovered" },
+              { triggerDay: s.day + 2, metric: "recall", delta: 4, message: "Retrain on diverse recent transactions expanded coverage — model now estimates previously uncertain property types" }
+            );
           },
         },
         {
@@ -722,7 +733,7 @@ export function getEventForDay(state: GameState): GameEvent | null {
       eventType: "triggered",
       title: "CRITICAL: MODEL QUALITY DEGRADED",
       description:
-        "Your model's precision has dropped below 60%. Predictions are flooded with false positives — users are getting irrelevant results at an unacceptable rate. Immediate action required.",
+        "Your model's prediction quality has dropped below 60%. Outputs are significantly wrong at an unacceptable rate — downstream decisions built on these predictions are materially harmed. Immediate action required.",
       choices: [
         {
           id: "A",
@@ -764,7 +775,7 @@ export function getEventForDay(state: GameState): GameEvent | null {
       eventType: "triggered",
       title: "CRITICAL: DETECTION RATE COLLAPSED",
       description:
-        "Your model's recall has dropped below 60%. The model is missing most of what it was designed to find — false negatives are at a critical level. Every real signal you should be catching is now going undetected.",
+        "Your model's coverage has dropped below 60%. The model is failing to handle most of the cases it was designed for — whether missing positive class predictions in classification or refusing to predict on uncertain inputs in regression. Every uncovered case is a failure at scale.",
       choices: [
         {
           id: "A",
@@ -1110,13 +1121,15 @@ export function getEventForDay(state: GameState): GameEvent | null {
       eventType: "random",
       title: "PREDICTION DISTRIBUTION SHIFT",
       description:
-        "Real-time monitoring shows the model's positive prediction rate increased 40% week-over-week with no corresponding change in actual event rates. Output distribution has shifted independently of input features.",
+        "Real-time monitoring shows the model's output distribution has shifted significantly week-over-week with no corresponding change in actual ground-truth rates. In classification this appears as a spike in positive prediction rate; in regression as systematic over- or under-prediction. Output predictions have drifted independently of input features.",
       choices: [
         {
           id: "A",
-          label: "Recalibrate model confidence and re-tune decision threshold",
+          // For classification: re-tuning the decision threshold corrects the shifted positive rate.
+          // For regression: recalibrating output bias corrects systematic over/under-prediction.
+          // Both are post-hoc output corrections — precision (or Accuracy Index) improves without retraining.
+          label: "Recalibrate model outputs and re-tune decision boundary",
           effect: (s) => {
-            // Threshold recalibration corrects for the shifted output distribution — precision improves
             s.metrics.precision += 6;
             s.metrics.inferenceCost += 3;
           },
