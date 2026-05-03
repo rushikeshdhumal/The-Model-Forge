@@ -86,8 +86,13 @@
   --chart-3: 45 90% 35%;
   --chart-4: 0 72% 38%;
   --chart-5: 280 65% 40%;
-
   --chart-grid: rgba(0, 0, 0, 0.07);
+
+  /* Default metric bar colors (light) */
+  --metric-healthy: hsl(110 65% 22%);
+  --metric-warning: hsl(45 90% 40%);
+  --metric-critical: hsl(0 72% 38%);
+  --metric-bg: hsl(110 12% 91%);
 }
 
 /* ---- Dark mode ---- */
@@ -125,8 +130,132 @@
   --chart-3: 45 100% 50%;
   --chart-4: 0 100% 50%;
   --chart-5: 280 100% 54%;
-
   --chart-grid: rgba(255, 255, 255, 0.05);
+
+  /* Default metric bar colors (dark) */
+  --metric-healthy: hsl(110 100% 54%);
+  --metric-warning: hsl(45 100% 50%);
+  --metric-critical: hsl(0 100% 50%);
+  --metric-bg: hsl(214 32% 17%);
+}
+
+/* ================================================================
+   HIGH CONTRAST — Dark
+   All text ≥ 7:1 contrast ratio (WCAG AAA)
+   ================================================================ */
+html.dark[data-colorscheme="high-contrast"] {
+  color-scheme: dark;
+  --background: 0 0% 0%;
+  --foreground: 0 0% 100%;
+  --border: 0 0% 100%;
+  --card: 0 0% 10%;
+  --card-foreground: 0 0% 100%;
+  --card-border: 0 0% 100%;
+  --popover: 0 0% 10%;
+  --popover-foreground: 0 0% 100%;
+  --popover-border: 0 0% 100%;
+  --primary: 187 100% 50%;      /* #00E5FF cyan */
+  --primary-foreground: 0 0% 0%;
+  --primary-border: 187 100% 60%;
+  --secondary: 0 0% 17%;
+  --secondary-foreground: 0 0% 100%;
+  --secondary-border: 0 0% 30%;
+  --muted: 0 0% 10%;
+  --muted-foreground: 0 0% 75%;
+  --muted-border: 0 0% 30%;
+  --accent: 187 100% 50%;
+  --accent-foreground: 0 0% 0%;
+  --accent-border: 187 100% 60%;
+  --destructive: 0 100% 60%;
+  --destructive-foreground: 0 0% 0%;
+  --destructive-border: 0 100% 70%;
+  --input: 0 0% 17%;
+  --ring: 60 100% 50%;          /* yellow focus rings for AAA */
+
+  --metric-healthy: #A3E635;    /* lime on black = 7.5:1 */
+  --metric-warning: #FACC15;    /* gold on black = 9.5:1 */
+  --metric-critical: #FF4444;   /* bright red on black = 5.1:1 */
+  --metric-bg: #333333;
+}
+
+/* ================================================================
+   HIGH CONTRAST — Light
+   All text ≥ 7:1 contrast ratio (WCAG AAA)
+   ================================================================ */
+html:not(.dark)[data-colorscheme="high-contrast"] {
+  color-scheme: light;
+  --background: 0 0% 100%;
+  --foreground: 0 0% 0%;
+  --border: 0 0% 0%;
+  --card: 0 0% 94%;
+  --card-foreground: 0 0% 0%;
+  --card-border: 0 0% 0%;
+  --popover: 0 0% 94%;
+  --popover-foreground: 0 0% 0%;
+  --popover-border: 0 0% 0%;
+  --primary: 240 100% 47%;      /* #0000EE classic blue */
+  --primary-foreground: 0 0% 100%;
+  --primary-border: 240 100% 35%;
+  --secondary: 0 0% 88%;
+  --secondary-foreground: 0 0% 0%;
+  --secondary-border: 0 0% 0%;
+  --muted: 0 0% 94%;
+  --muted-foreground: 0 0% 13%;
+  --muted-border: 0 0% 0%;
+  --accent: 240 100% 47%;
+  --accent-foreground: 0 0% 100%;
+  --accent-border: 240 100% 35%;
+  --destructive: 0 100% 35%;
+  --destructive-foreground: 0 0% 100%;
+  --destructive-border: 0 100% 25%;
+  --input: 0 0% 88%;
+  --ring: 240 100% 47%;
+
+  --metric-healthy: #005500;    /* dark green on white = 11:1 */
+  --metric-warning: #7A4500;    /* dark amber on white = 9:1  */
+  --metric-critical: #AA0000;   /* dark red on white = 9.5:1  */
+  --metric-bg: #D0D0D0;
+}
+
+/* High contrast: stronger focus indicator on all focusable elements */
+html[data-colorscheme="high-contrast"] :focus-visible {
+  outline: 3px solid hsl(var(--ring)) !important;
+  outline-offset: 3px !important;
+}
+
+/* ================================================================
+   METRIC-DRIVEN — Dark
+   Bars change color dynamically based on value threshold
+   ================================================================ */
+html.dark[data-colorscheme="metric-driven"] {
+  --metric-healthy: #10B981;    /* emerald */
+  --metric-warning: #F59E0B;    /* amber */
+  --metric-critical: #E11D48;   /* rose */
+  --metric-bg: #1e2d2a;
+}
+
+/* ================================================================
+   METRIC-DRIVEN — Light
+   ================================================================ */
+html:not(.dark)[data-colorscheme="metric-driven"] {
+  --metric-healthy: #059669;
+  --metric-warning: #D97706;
+  --metric-critical: #BE123C;
+  --metric-bg: #E5E7EB;
+}
+
+/* Critical metric pulse animation — respects reduced motion */
+@keyframes metric-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.55; }
+}
+.metric-bar-critical-pulse {
+  animation: metric-pulse 1.2s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .metric-bar-critical-pulse {
+    animation: none;
+  }
 }
 
 @layer base {

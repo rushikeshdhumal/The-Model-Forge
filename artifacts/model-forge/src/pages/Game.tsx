@@ -266,22 +266,24 @@ const CODEX_WIN_LOSS = [
 
 // ---- Helpers ----
 
-function metricColor(value: number): string {
-  if (value > 70) return "text-primary";
-  if (value > 30) return "text-yellow-400";
-  return "text-destructive";
+function metricHealth(value: number): "healthy" | "warning" | "critical" {
+  if (value > 70) return "healthy";
+  if (value > 30) return "warning";
+  return "critical";
 }
 
-function metricBarColor(value: number): string {
-  if (value > 70) return "bg-primary";
-  if (value > 30) return "bg-yellow-400";
-  return "bg-destructive";
+function metricValueStyle(health: "healthy" | "warning" | "critical"): React.CSSProperties {
+  return { color: `var(--metric-${health})` };
 }
 
-function skewBadgeClass(skew: string): string {
-  if (skew === "Low") return "bg-primary/20 text-primary border-primary/40";
-  if (skew === "Medium") return "bg-yellow-400/20 text-yellow-400 border-yellow-400/40";
-  return "bg-destructive/20 text-destructive border-destructive/40";
+function metricBarStyle(health: "healthy" | "warning" | "critical", pct: number): React.CSSProperties {
+  return { width: `${pct}%`, backgroundColor: `var(--metric-${health})` };
+}
+
+function skewHealth(skew: string): "healthy" | "warning" | "critical" {
+  if (skew === "Low") return "healthy";
+  if (skew === "Medium") return "warning";
+  return "critical";
 }
 
 function MetricBar({
@@ -297,14 +299,17 @@ function MetricBar({
 }) {
   const pct = Math.min(100, Math.max(0, (value / maxVal) * 100));
   const displayValue = subtitle ?? `${value.toFixed(1)}%`;
+  const health = metricHealth(pct);
+  const isCritical = health === "critical";
   return (
     <div data-testid={`metric-${label.toLowerCase().replace(/\s+/g, "-")}`}>
       <div className="flex justify-between text-xs mb-1">
         <span className="text-muted-foreground uppercase tracking-widest" id={`metric-label-${label.toLowerCase().replace(/\s+/g, "-")}`}>{label}</span>
-        <span className={metricColor(pct)} aria-live="polite">{displayValue}</span>
+        <span style={metricValueStyle(health)} aria-live="polite">{displayValue}</span>
       </div>
       <div
-        className="h-1.5 bg-secondary/60 rounded-none overflow-hidden"
+        className="h-1.5 rounded-none overflow-hidden"
+        style={{ backgroundColor: "var(--metric-bg)" }}
         role="meter"
         aria-valuemin={0}
         aria-valuemax={maxVal}
@@ -313,8 +318,9 @@ function MetricBar({
         aria-labelledby={`metric-label-${label.toLowerCase().replace(/\s+/g, "-")}`}
       >
         <div
-          className={`h-full transition-all duration-500 ${metricBarColor(pct)}`}
-          style={{ width: `${pct}%` }}
+          className={`h-full transition-all duration-500${isCritical ? " metric-bar-critical-pulse" : ""}`}
+          style={metricBarStyle(health, pct)}
+          data-metric-health={health}
         />
       </div>
     </div>
@@ -558,7 +564,7 @@ export default function Game() {
     );
   };
 
-  const { theme, toggleTheme } = useTheme();
+  const { theme, toggleTheme, colorScheme, setColorScheme } = useTheme();
 
   useEffect(() => {
     document.title = "The Model Forge | ML Production Simulator";
@@ -764,6 +770,16 @@ export default function Game() {
             >
               {theme === "dark" ? "☀ LIGHT" : "◗ DARK"}
             </button>
+            <select
+              value={colorScheme}
+              onChange={(e) => setColorScheme(e.target.value as "default" | "high-contrast" | "metric-driven")}
+              aria-label="Color scheme"
+              className="text-[11px] text-muted-foreground/70 border border-border/40 px-2 py-1 tracking-widest bg-background hover:border-primary/40 hover:text-primary transition-colors cursor-pointer focus:outline-none focus-visible:outline focus-visible:outline-2"
+            >
+              <option value="default">DEFAULT</option>
+              <option value="high-contrast">HIGH CONTRAST</option>
+              <option value="metric-driven">METRIC COLORS</option>
+            </select>
             <button
               onClick={() => { setAuthMode(playerName ? "login" : "register"); setAuthUsername(""); setAuthPassword(""); setAuthConfirm(""); setAuthError(""); setShowIdentity(true); }}
               className="text-[11px] text-primary/60 border border-primary/25 px-2.5 py-1 tracking-widest hover:border-primary/50 hover:text-primary transition-colors"
@@ -1065,6 +1081,16 @@ export default function Game() {
             >
               {theme === "dark" ? "☀" : "◗"}
             </button>
+            <select
+              value={colorScheme}
+              onChange={(e) => setColorScheme(e.target.value as "default" | "high-contrast" | "metric-driven")}
+              aria-label="Color scheme"
+              className="text-[11px] text-muted-foreground/70 border border-border/40 px-2 py-1 tracking-widest bg-background hover:border-primary/40 hover:text-primary transition-colors cursor-pointer focus:outline-none focus-visible:outline focus-visible:outline-2"
+            >
+              <option value="default">◈</option>
+              <option value="high-contrast">◈ HC</option>
+              <option value="metric-driven">◈ MD</option>
+            </select>
           </div>
         </div>
       </header>
@@ -1141,7 +1167,12 @@ export default function Game() {
               <div className="flex items-center justify-between pt-1 border-t border-border/40">
                 <span className="text-xs text-muted-foreground uppercase tracking-widest">Skew Alert</span>
                 <span
-                  className={`text-xs font-bold border px-2 py-0.5 ${skewBadgeClass(viewState.metrics.skew)}`}
+                  className="text-xs font-bold border px-2 py-0.5"
+                  style={{
+                    color: `var(--metric-${skewHealth(viewState.metrics.skew)})`,
+                    borderColor: `var(--metric-${skewHealth(viewState.metrics.skew)})`,
+                    backgroundColor: `color-mix(in srgb, var(--metric-${skewHealth(viewState.metrics.skew)}) 15%, transparent)`,
+                  }}
                 >
                   {viewState.metrics.skew.toUpperCase()}
                 </span>
