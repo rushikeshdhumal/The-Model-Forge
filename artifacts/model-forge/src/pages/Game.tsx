@@ -635,7 +635,7 @@ const CODEX_WIN_LOSS = [
   { label: "SLA Adherence ≤ 0%", type: "loss", note: "Complete production outage. No inference requests are completing." },
   { label: "Feature Staleness > 32h", type: "loss", note: "Features are 32+ hours old. The model is predicting on a distribution that no longer exists — training-serving skew is catastrophic." },
   { label: "Inference Cost ≥ 100", type: "loss", note: "Infrastructure budget exhausted. The cluster shuts down." },
-  { label: "Survive all 14 days", type: "win", note: "You maintained production without a critical outage. Congratulations — most models don't." },
+  { label: "Survive all 14 days", type: "win", note: "You maintained production without a critical outage. Congratulations — most models don't. Your grade (D → S) reflects how well you survived: metric quality (40 pts), longest clean streak (20 pts), days survived (20 pts), win bonus (10 pts), and difficulty tier (up to 25 pts)." },
 ];
 
 // ---- Helpers ----
@@ -1962,7 +1962,10 @@ export default function Game() {
             {/* Score breakdown */}
             {runScore && (() => {
               const difficulty = DIFFICULTY_BY_SCENARIO[gameState.scenario] ?? 1;
-              const diffBonus = ({ 1: 0, 2: 15, 3: 25 } as Record<number, number>)[difficulty] ?? 0;
+              // Must match DIFFICULTY_BONUS in computeRunScore: { 1: 10, 2: 15, 3: 25 }.
+              // Previously had { 1: 0, 2: 15, 3: 25 } — Default runs showed a 10-point gap between
+              // the displayed breakdown total and the actual score shown at the top of the dialog.
+              const diffBonus = ({ 1: 10, 2: 15, 3: 25 } as Record<number, number>)[difficulty] ?? 0;
               const diffLabel = ({ 1: "BEGINNER ★☆☆", 2: "MODERATE ★★☆", 3: "HARD ★★★" } as Record<number, string>)[difficulty] ?? "";
               const daysCompleted = Math.max(0, gameState.day - 1);
               const m = gameState.metrics;

@@ -1160,13 +1160,19 @@ export function getEventForDay(state: GameState): GameEvent | null {
                 triggerDay: s.day + 3,
                 metric: "precision",
                 delta: -6,
-                message: "Label noise compounded into systematic bias — false-positive patterns reinforced, precision degraded faster than passive drift alone",
+                // "false-positive patterns reinforced" was correct for Stripe/classification but wrong for
+                // Zillow (regression has no FP/FN) and ranking scenarios. Message made scenario-neutral:
+                // label errors cause the model to learn wrong decision boundaries regardless of problem type.
+                message: "Label noise compounded into systematic bias — corrupted training signal reinforced wrong patterns, precision degraded faster than passive drift alone",
               },
               {
                 triggerDay: s.day + 3,
                 metric: "recall",
                 delta: -2,
-                message: "Label noise caused the model to under-learn genuine fraud patterns — Fraud Recall quietly eroded as mislabeled fraud cases became blind spots",
+                // "Fraud Recall" was Stripe-specific language in a universal event. This message shows in
+                // the Event Log for ALL scenarios including Amazon (Candidate Recall), Netflix (Diversity
+                // Score), Google (MAP Index), Uber (Surge Coverage), Zillow (Coverage Index). Made neutral.
+                message: "Label noise caused the model to under-learn genuine positive patterns — recall eroded as mislabeled cases became systematic blind spots in the detection pipeline",
               }
             );
           },
