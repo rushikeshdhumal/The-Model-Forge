@@ -208,25 +208,35 @@ router.post("/save-state", writeLimiter, async (req, res) => {
   const body = SaveStateBody.parse(req.body);
   const { sessionId, state } = body;
 
+  // Extract denormalised columns from state at write-time so reads never need JSONB ops
+  const s = state as { scenario?: string; day?: number; status?: string; wins?: number; score?: number };
+  const scenario = s.scenario ?? "default";
+  const day = s.day ?? 1;
+  const status = s.status ?? "playing";
+  const wins = s.wins ?? 0;
+  const score = s.score ?? 0;
+
   try {
     await db
       .insert(sessionsTable)
       .values({
         sessionId,
         state: state as Record<string, unknown>,
-        scenario: (state as { scenario?: string }).scenario ?? "default",
-        day: (state as { day?: number }).day ?? 1,
-        status: (state as { status?: string }).status ?? "playing",
-        wins: (state as { wins?: number }).wins ?? 0,
+        scenario,
+        day,
+        status,
+        wins,
+        score,
       })
       .onConflictDoUpdate({
         target: sessionsTable.sessionId,
         set: {
           state: state as Record<string, unknown>,
-          scenario: (state as { scenario?: string }).scenario ?? "default",
-          day: (state as { day?: number }).day ?? 1,
-          status: (state as { status?: string }).status ?? "playing",
-          wins: (state as { wins?: number }).wins ?? 0,
+          scenario,
+          day,
+          status,
+          wins,
+          score,
           updatedAt: new Date(),
         },
       });
@@ -442,16 +452,18 @@ router.post("/login", authLimiter, async (req, res) => {
 
 router.get("/leaderboard", readLimiter, async (req, res) => {
   try {
-    // Extract only the needed JSONB fields in SQL — avoids transferring the full
-    // game-state blob (potentially 10–50 KB per row) for every leaderboard entry
+    // score is now a dedicated column — the composite index (status, score, day)
+    // lets PostgreSQL serve this entire query without touching the JSONB blob or
+    // doing any post-fetch sorting in JavaScript
     const rows = await db
       .select({
         scenario: sessionsTable.scenario,
         day: sessionsTable.day,
         wins: sessionsTable.wins,
+        score: sessionsTable.score,
         updatedAt: sessionsTable.updatedAt,
         username: playersTable.username,
-        score: sql<number>`coalesce((${sessionsTable.state}->>'score')::int, 0)`,
+        // Remaining display fields are still JSONB-extracted but only for ≤10 rows
         grade: sql<string>`coalesce(${sessionsTable.state}->>'grade', 'D')`,
         maxStreak: sql<number>`coalesce((${sessionsTable.state}->>'maxStreak')::int, 0)`,
         metricPrecision: sql<number>`coalesce((${sessionsTable.state}->'metrics'->>'precision')::float, 0)`,
@@ -461,25 +473,24 @@ router.get("/leaderboard", readLimiter, async (req, res) => {
       .from(sessionsTable)
       .leftJoin(playersTable, eq(sessionsTable.sessionId, playersTable.sessionId))
       .where(eq(sessionsTable.status, "won"))
-      .orderBy(desc(sessionsTable.day), desc(sessionsTable.wins))
-      .limit(50);
+      // Sort entirely in the DB — the index covers status + score + day so this is
+      // an index scan with early LIMIT termination, no sort step needed
+      .orderBy(desc(sessionsTable.score), desc(sessionsTable.day))
+      .limit(10);
 
-    const entries = rows
-      .map((row) => ({
-        username: row.username ?? null,
-        scenario: row.scenario,
-        day: row.day,
-        wins: row.wins,
-        precision: row.metricPrecision,
-        recall: row.metricRecall,
-        slaAdherence: row.metricSla,
-        completedAt: row.updatedAt.toISOString(),
-        score: row.score,
-        grade: row.grade,
-        maxStreak: row.maxStreak,
-      }))
-      .sort((a, b) => b.score - a.score || b.precision - a.precision)
-      .slice(0, 10);
+    const entries = rows.map((row) => ({
+      username: row.username ?? null,
+      scenario: row.scenario,
+      day: row.day,
+      wins: row.wins,
+      precision: row.metricPrecision,
+      recall: row.metricRecall,
+      slaAdherence: row.metricSla,
+      completedAt: row.updatedAt.toISOString(),
+      score: row.score,
+      grade: row.grade,
+      maxStreak: row.maxStreak,
+    }));
 
     const data = GetLeaderboardResponse.parse({ entries });
     res.json(data);
