@@ -38,6 +38,12 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet";
+import {
   LineChart,
   Line,
   XAxis,
@@ -46,6 +52,214 @@ import {
   ResponsiveContainer,
   CartesianGrid,
 } from "recharts";
+
+// ---- Codex data ----
+
+const CODEX_METRICS = [
+  {
+    name: "PRECISION",
+    icon: "◎",
+    definition: "Of all predictions your model labels as positive, what fraction are actually positive?",
+    formula: "True Positives / (True Positives + False Positives)",
+    whyItMatters:
+      "Low precision means your model cries wolf — real users get false alarms or irrelevant recommendations, eroding trust fast.",
+    causes: [
+      "Passive decay — distributions shift daily as user behavior evolves",
+      "Overfitting to training data that doesn't match live distribution",
+      "Data poisoning contaminating the training pipeline",
+      "Concept drift making previously valid signals noise",
+    ],
+    recovery: [
+      "Retrain on a fresh dataset with a larger, more representative sample",
+      "Promote a staged model that was trained more recently",
+      "Add a validation set that better mirrors production distribution",
+      "Enable CI/CD auto-retraining to keep the model current",
+    ],
+    lossThreshold: "≤ 0%",
+  },
+  {
+    name: "RECALL",
+    icon: "◉",
+    definition: "Of all actual positives in the world, what fraction does your model successfully detect?",
+    formula: "True Positives / (True Positives + False Negatives)",
+    whyItMatters:
+      "Low recall means you're missing real signals. In fraud detection, that's undetected fraud. In medical AI, that's missed diagnoses. The cost of missing positives is often higher than false alarms.",
+    causes: [
+      "Overfitting that tunes precision while sacrificing recall on rare classes",
+      "Concept drift changing what a 'positive' looks like in production",
+      "Data imbalance — the model under-learns the minority class",
+      "Passive decay as distribution slowly shifts away from training baseline",
+    ],
+    recovery: [
+      "Adjust the classification threshold (lower it to catch more positives)",
+      "Retrain with oversampled minority-class examples",
+      "Switch to a model type better suited to imbalanced data (e.g. Ensemble)",
+      "Add recall as an explicit optimization target alongside precision",
+    ],
+    lossThreshold: "≤ 0%",
+  },
+  {
+    name: "SLA ADHERENCE",
+    icon: "◈",
+    definition:
+      "The percentage of inference requests that complete within your agreed latency and availability targets.",
+    formula: "Requests meeting SLA / Total Requests × 100",
+    whyItMatters:
+      "SLA adherence is the contract between your ML system and the business. Breaching it means customer-facing failures, contract penalties, and — at zero — a complete production outage.",
+    causes: [
+      "Latency spikes from traffic surges overwhelming the inference cluster",
+      "Infrastructure failures in the serving layer",
+      "Cascading failures when no fallback model is staged",
+      "Cost-cutting that removed headroom from the cluster",
+    ],
+    recovery: [
+      "Scale the inference cluster (costs more but restores uptime immediately)",
+      "Rollback to a lighter, faster model in staging",
+      "Implement circuit breakers and graceful degradation",
+      "Set up autoscaling with a buffer above peak-traffic capacity",
+    ],
+    lossThreshold: "≤ 0%",
+  },
+  {
+    name: "FEATURE STALENESS",
+    icon: "◧",
+    definition: "Hours since your feature pipeline last refreshed the inputs the model reads at inference time.",
+    formula: "Current time − Last successful feature refresh",
+    whyItMatters:
+      "Your model makes predictions using features. If those features are hours old, you're predicting on stale data — widening training-serving skew and degrading prediction quality silently.",
+    causes: [
+      "Feature Store disabled — features accumulate staleness each day",
+      "Upstream pipeline delays blocking the refresh",
+      "Infrastructure failures in the data ingestion layer",
+      "Ignoring null-feature spikes that indicate upstream data loss",
+    ],
+    recovery: [
+      "Enable the Feature Store — it auto-refreshes and caps staleness at 2h",
+      "Run an emergency feature refresh (one-time reset)",
+      "Fix the upstream pipeline delay event to restore normal cadence",
+    ],
+    lossThreshold: "> 48h",
+  },
+  {
+    name: "INFERENCE COST",
+    icon: "◬",
+    definition: "A normalized index (0–100) representing the resource cost of running model inference per unit time.",
+    formula: "Normalized compute spend relative to budget ceiling",
+    whyItMatters:
+      "Every scale-up action, GPU spot instance, and cluster expansion adds to inference cost. At 100, you've exceeded your infrastructure budget and the system shuts down.",
+    causes: [
+      "Scaling the cluster to handle latency or traffic events",
+      "Running expensive model types (Neural Networks cost more than Linear)",
+      "A/B testing a canary model doubles your serving footprint",
+      "GPU spot interruption forcing you onto on-demand instances",
+    ],
+    recovery: [
+      "Switch to a lighter model variant (Linear or XGBoost over Neural Network)",
+      "Reduce cluster size after a traffic event subsides",
+      "Optimize batch sizes to amortize inference cost",
+      "Avoid scaling unless the SLA is actively breaching",
+    ],
+    lossThreshold: "≥ 100",
+  },
+  {
+    name: "SKEW ALERT",
+    icon: "◭",
+    definition:
+      "Training-serving skew: how much your live feature distributions have diverged from the distribution your model was trained on.",
+    formula: "Distribution distance between training-time and serving-time features",
+    whyItMatters:
+      "Your model learned patterns from training data. If the features it sees in production look different, its learned patterns no longer apply — predictions degrade silently without any explicit metric dropping immediately.",
+    causes: [
+      "Feature Store disabled — serving features diverge from training over time",
+      "Data poisoning injecting adversarial inputs into the pipeline",
+      "Bias in training data that doesn't reflect the true population",
+      "Null feature spikes where inputs are missing or malformed",
+    ],
+    recovery: [
+      "Enable the Feature Store with consistent feature versioning",
+      "Add data validation to detect and reject anomalous inputs",
+      "Retrain with a fresh dataset that matches the current serving distribution",
+      "Investigate and fix the upstream data pipeline",
+    ],
+    lossThreshold: "N/A — High skew degrades all other metrics",
+  },
+];
+
+const CODEX_CONCEPTS = [
+  {
+    term: "FEATURE STORE",
+    icon: "⬡",
+    explanation:
+      "A centralized system that computes, stores, and serves features consistently for both model training and inference. When enabled, it keeps your Feature Staleness at ≤2h by auto-refreshing and ensures your model sees the same feature distribution at serving time as it did at training time — eliminating training-serving skew.",
+    benefit: "Prevents Feature Staleness buildup and reduces Skew from High/Medium toward Low.",
+    cost: "One-time setup investment; ongoing infrastructure overhead.",
+  },
+  {
+    term: "CI/CD AUTO-RETRAIN",
+    icon: "⬢",
+    explanation:
+      "A continuous integration and deployment pipeline that automatically retrains your model on a schedule or when drift is detected, runs validation tests, and promotes the new model to staging. In the game, enabling it adds +2% Precision per day — simulating the benefit of keeping your model current.",
+    benefit: "+2% Precision per day. Counters concept drift automatically over time.",
+    cost: "Increased Inference Cost from compute for retraining runs.",
+  },
+  {
+    term: "MODEL REGISTRY",
+    icon: "⬣",
+    explanation:
+      "A versioned store of trained model artifacts with metadata (accuracy, latency, cost, explainability score, training data version). Staging models give you a tested fallback when production degrades. The registry lets you compare models, track lineage, and promote or rollback with confidence.",
+    benefit: "Safe rollback path. Audit trail. A/B test infrastructure.",
+    cost: "Storage overhead; discipline to maintain staging models.",
+  },
+  {
+    term: "CONCEPT DRIFT",
+    icon: "≋",
+    explanation:
+      "The statistical relationship between your input features and the target variable changes over time. A model trained on last year's user behavior may predict this year's behavior poorly — not because the model is broken, but because the world has changed. Netflix saw this with COVID lockdowns; Google saw it with the flood of LLM-generated web content.",
+    benefit: "N/A — drift is a hazard, not a feature.",
+    cost: "Silent Precision and Recall degradation. Requires retraining or drift-aware evaluation.",
+  },
+  {
+    term: "TRAINING-SERVING SKEW",
+    icon: "≠",
+    explanation:
+      "A mismatch between the feature distribution your model was trained on and the features it receives at inference time. Can be caused by: different preprocessing code paths, stale features at serving time, data pipeline bugs, or adversarial poisoning. Always use the same Feature Store for both training and serving.",
+    benefit: "N/A — skew is a hazard.",
+    cost: "Degrades all accuracy metrics silently before becoming visible.",
+  },
+  {
+    term: "SLA / SLO",
+    icon: "◻",
+    explanation:
+      "Service Level Agreement (SLA): the external contract with customers specifying availability and latency guarantees. Service Level Objective (SLO): the internal target your team aims to hit, usually set above the SLA to give headroom. In real ML systems, P99 latency (the 99th percentile) is the most common SLA metric for inference endpoints.",
+    benefit: "N/A — a constraint, not a feature.",
+    cost: "Violating SLAs triggers escalations, penalties, and customer churn.",
+  },
+  {
+    term: "CANARY DEPLOYMENT",
+    icon: "◁",
+    explanation:
+      "Routing a small fraction of live traffic (e.g. 10%) to a new candidate model while keeping the existing model serving the majority. Lets you validate the new model against real traffic before full promotion — catching issues that don't surface in offline evaluation. A/B test events in the game represent canary deployments.",
+    benefit: "Safe validation of new models in production before full rollout.",
+    cost: "Doubles your serving footprint for the duration of the experiment.",
+  },
+  {
+    term: "FEATURE PIPELINE",
+    icon: "⇒",
+    explanation:
+      "The data engineering infrastructure that ingests raw data, transforms it into model-ready features, and delivers those features to both the training job and the inference endpoint. Pipeline delays, schema changes, or upstream failures directly increase Feature Staleness and can introduce Skew if the training and serving pipelines diverge.",
+    benefit: "N/A — infrastructure that must be kept healthy.",
+    cost: "A single pipeline failure cascades into staleness, skew, and accuracy degradation.",
+  },
+];
+
+const CODEX_WIN_LOSS = [
+  { label: "Precision ≤ 0%", type: "loss", note: "Model outputs are effectively random. Immediate retrain or rollback required." },
+  { label: "Recall ≤ 0%", type: "loss", note: "Model detects nothing. Complete miss rate on all positive cases." },
+  { label: "SLA Adherence ≤ 0%", type: "loss", note: "Complete production outage. No inference requests are completing." },
+  { label: "Feature Staleness > 48h", type: "loss", note: "Features are 2+ days old. Model is predicting on a distribution that no longer exists." },
+  { label: "Inference Cost ≥ 100", type: "loss", note: "Infrastructure budget exhausted. The cluster shuts down." },
+  { label: "Survive all 14 days", type: "win", note: "You maintained production without a critical outage. Congratulations — most models don't." },
+];
 
 // ---- Helpers ----
 
@@ -206,6 +420,8 @@ export default function Game() {
   const [historyView, setHistoryView] = useState<number | null>(null);
   const [briefDismissed, setBriefDismissed] = useState(false);
   const [scenarioBrief, setScenarioBrief] = useState<ScenarioBrief | null>(null);
+  const [showCodex, setShowCodex] = useState(false);
+  const [codexSection, setCodexSection] = useState<"metrics" | "concepts" | "reference">("metrics");
   const logRef = useRef<HTMLDivElement>(null);
 
   // ---- Session bootstrap ----
@@ -437,6 +653,15 @@ export default function Game() {
                 <SelectItem value="mlops">MLOps Lead</SelectItem>
               </SelectContent>
             </Select>
+            <Button
+              variant="outline"
+              size="sm"
+              className="text-primary/70 border-primary/30 hover:bg-primary/10 hover:text-primary text-xs"
+              onClick={() => setShowCodex(true)}
+              data-testid="button-codex"
+            >
+              CODEX
+            </Button>
             <Button
               variant="outline"
               size="sm"
@@ -987,6 +1212,215 @@ export default function Game() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Codex Sheet */}
+      <Sheet open={showCodex} onOpenChange={setShowCodex}>
+        <SheetContent
+          side="right"
+          className="w-full sm:max-w-xl bg-card border-l border-primary/20 font-mono text-foreground overflow-y-auto p-0"
+        >
+          <SheetHeader className="px-5 pt-5 pb-3 border-b border-border/40 sticky top-0 bg-card z-10">
+            <SheetTitle className="text-primary tracking-widest text-sm">MLOPS CODEX</SheetTitle>
+            <p className="text-[10px] text-muted-foreground">
+              Reference guide — metrics, concepts, and win/loss conditions
+            </p>
+            <div className="flex gap-1 pt-2">
+              {(["metrics", "concepts", "reference"] as const).map((tab) => (
+                <button
+                  key={tab}
+                  onClick={() => setCodexSection(tab)}
+                  className={`text-[10px] tracking-widest px-3 py-1 border transition-colors ${
+                    codexSection === tab
+                      ? "border-primary/60 bg-primary/10 text-primary"
+                      : "border-border/40 text-muted-foreground hover:text-foreground hover:border-border"
+                  }`}
+                >
+                  {tab.toUpperCase()}
+                </button>
+              ))}
+            </div>
+          </SheetHeader>
+
+          <div className="px-5 py-4 space-y-5">
+            {/* ---- METRICS TAB ---- */}
+            {codexSection === "metrics" && (
+              <>
+                {CODEX_METRICS.map((m) => (
+                  <details key={m.name} className="group border border-border/40 open:border-primary/30">
+                    <summary className="flex items-center gap-2 px-3 py-2.5 cursor-pointer select-none list-none hover:bg-primary/5 transition-colors">
+                      <span className="text-primary text-sm">{m.icon}</span>
+                      <span className="text-xs font-bold tracking-widest flex-1">{m.name}</span>
+                      <span className="text-[10px] text-muted-foreground border border-border/40 px-1.5 py-0.5">
+                        LOSS @ {m.lossThreshold}
+                      </span>
+                      <span className="text-muted-foreground text-xs group-open:rotate-90 transition-transform">▶</span>
+                    </summary>
+                    <div className="px-4 pb-4 pt-2 space-y-3 border-t border-border/30">
+                      <div>
+                        <div className="text-[9px] tracking-widest text-muted-foreground mb-1">DEFINITION</div>
+                        <p className="text-xs leading-relaxed">{m.definition}</p>
+                      </div>
+                      <div className="bg-secondary/30 px-2.5 py-1.5">
+                        <span className="text-[9px] tracking-widest text-muted-foreground">FORMULA: </span>
+                        <span className="text-xs text-primary/80 font-mono">{m.formula}</span>
+                      </div>
+                      <div>
+                        <div className="text-[9px] tracking-widest text-muted-foreground mb-1">WHY IT MATTERS</div>
+                        <p className="text-xs leading-relaxed text-muted-foreground">{m.whyItMatters}</p>
+                      </div>
+                      <div>
+                        <div className="text-[9px] tracking-widest text-destructive mb-1.5">WHAT CAUSES IT TO DROP</div>
+                        <ul className="space-y-1">
+                          {m.causes.map((c, i) => (
+                            <li key={i} className="text-xs flex gap-2">
+                              <span className="text-destructive shrink-0">—</span>
+                              <span className="text-muted-foreground">{c}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                      <div>
+                        <div className="text-[9px] tracking-widest text-primary mb-1.5">HOW TO RECOVER</div>
+                        <ul className="space-y-1">
+                          {m.recovery.map((r, i) => (
+                            <li key={i} className="text-xs flex gap-2">
+                              <span className="text-primary shrink-0">+</span>
+                              <span>{r}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    </div>
+                  </details>
+                ))}
+              </>
+            )}
+
+            {/* ---- CONCEPTS TAB ---- */}
+            {codexSection === "concepts" && (
+              <>
+                {CODEX_CONCEPTS.map((c) => (
+                  <details key={c.term} className="group border border-border/40 open:border-primary/30">
+                    <summary className="flex items-center gap-2 px-3 py-2.5 cursor-pointer select-none list-none hover:bg-primary/5 transition-colors">
+                      <span className="text-primary text-sm">{c.icon}</span>
+                      <span className="text-xs font-bold tracking-widest flex-1">{c.term}</span>
+                      <span className="text-muted-foreground text-xs group-open:rotate-90 transition-transform">▶</span>
+                    </summary>
+                    <div className="px-4 pb-4 pt-2 space-y-3 border-t border-border/30">
+                      <p className="text-xs leading-relaxed">{c.explanation}</p>
+                      {c.benefit !== "N/A — a constraint, not a feature." &&
+                        c.benefit !== "N/A — drift is a hazard, not a feature." &&
+                        c.benefit !== "N/A — skew is a hazard." && (
+                        <div className="border-l-2 border-primary/40 pl-2.5">
+                          <div className="text-[9px] tracking-widest text-primary mb-0.5">BENEFIT</div>
+                          <p className="text-xs text-primary/80">{c.benefit}</p>
+                        </div>
+                      )}
+                      {c.cost && (
+                        <div className="border-l-2 border-yellow-400/40 pl-2.5">
+                          <div className="text-[9px] tracking-widest text-yellow-400 mb-0.5">TRADE-OFF</div>
+                          <p className="text-xs text-yellow-400/80">{c.cost}</p>
+                        </div>
+                      )}
+                    </div>
+                  </details>
+                ))}
+              </>
+            )}
+
+            {/* ---- REFERENCE TAB ---- */}
+            {codexSection === "reference" && (
+              <div className="space-y-4">
+                <div>
+                  <div className="text-[10px] tracking-widest text-muted-foreground mb-3">WIN / LOSS CONDITIONS</div>
+                  <div className="space-y-2">
+                    {CODEX_WIN_LOSS.map((entry, i) => (
+                      <div
+                        key={i}
+                        className={`border p-2.5 ${
+                          entry.type === "win"
+                            ? "border-primary/30 bg-primary/5"
+                            : "border-destructive/30 bg-destructive/5"
+                        }`}
+                      >
+                        <div className={`text-xs font-bold mb-0.5 ${entry.type === "win" ? "text-primary" : "text-destructive"}`}>
+                          {entry.type === "win" ? "WIN" : "LOSS"}: {entry.label}
+                        </div>
+                        <p className="text-[11px] text-muted-foreground leading-relaxed">{entry.note}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="border-t border-border/40 pt-4">
+                  <div className="text-[10px] tracking-widest text-muted-foreground mb-3">PASSIVE DECAY (PER TURN)</div>
+                  <div className="space-y-1.5 text-xs">
+                    {[
+                      ["Precision", "−1% per day"],
+                      ["Recall", "−1% per day"],
+                      ["SLA Adherence", "−0.5% per day"],
+                      ["Feature Staleness", "+2h per day (Feature Store OFF)"],
+                      ["Feature Staleness", "Reset to 2h per day (Feature Store ON)"],
+                      ["Precision (CI/CD ON)", "+2% per day (offsets natural decay)"],
+                    ].map(([label, value], i) => (
+                      <div key={i} className="flex justify-between border-b border-border/20 pb-1">
+                        <span className="text-muted-foreground">{label}</span>
+                        <span className={value!.startsWith("+") ? "text-primary" : "text-destructive"}>{value}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="border-t border-border/40 pt-4">
+                  <div className="text-[10px] tracking-widest text-muted-foreground mb-3">USER LEVEL UNLOCKS</div>
+                  <div className="space-y-2 text-xs">
+                    {[
+                      { level: "INTERN", unlocks: "Core metrics, incident events, event log" },
+                      { level: "ML ENGINEER", unlocks: "Model Registry — see all model versions, stages, and metadata" },
+                      { level: "MLOPS LEAD", unlocks: "Infrastructure controls (Feature Store, CI/CD toggles) + Time Travel Debugger" },
+                    ].map((entry) => (
+                      <div key={entry.level} className="border border-border/30 p-2">
+                        <div className="font-bold text-primary mb-0.5">{entry.level}</div>
+                        <div className="text-muted-foreground">{entry.unlocks}</div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="border-t border-border/40 pt-4">
+                  <div className="text-[10px] tracking-widest text-muted-foreground mb-3">SCENARIO DIFFICULTY</div>
+                  <div className="space-y-1.5 text-xs">
+                    {[
+                      { id: "default", label: "Default", difficulty: "Easy", risk: "No inherited problems" },
+                      { id: "netflix-google", label: "Netflix / Google", difficulty: "Medium", risk: "Precision handicap + concept drift event" },
+                      { id: "uber-facebook", label: "Uber / Facebook", difficulty: "Medium", risk: "SLA handicap + latency crisis event" },
+                      { id: "zillow-tesla", label: "Zillow / Tesla", difficulty: "Hard", risk: "Recall handicap + overfitting event" },
+                      { id: "amazon-twitter", label: "Amazon / Twitter", difficulty: "Hard", risk: "Skew handicap + bias audit event" },
+                      { id: "tay-stripe", label: "Tay / Stripe", difficulty: "Hard", risk: "Skew handicap + data poisoning event" },
+                    ].map((entry) => (
+                      <div key={entry.id} className="flex items-start justify-between border-b border-border/20 pb-1.5 gap-3">
+                        <div>
+                          <div className="font-bold">{entry.label}</div>
+                          <div className="text-muted-foreground text-[10px] mt-0.5">{entry.risk}</div>
+                        </div>
+                        <span className={`text-[10px] border px-1.5 py-0.5 shrink-0 ${
+                          entry.difficulty === "Easy"
+                            ? "border-primary/40 text-primary"
+                            : entry.difficulty === "Medium"
+                            ? "border-yellow-400/40 text-yellow-400"
+                            : "border-destructive/40 text-destructive"
+                        }`}>
+                          {entry.difficulty.toUpperCase()}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        </SheetContent>
+      </Sheet>
     </div>
   );
 }
