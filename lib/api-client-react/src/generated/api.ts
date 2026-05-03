@@ -18,6 +18,9 @@ import type {
 
 import type {
   HealthStatus,
+  IdentifyPlayerBody,
+  IdentifyPlayerError,
+  IdentifyPlayerResponse,
   LeaderboardResponse,
   LoadStateParams,
   LoadStateResponse,
@@ -364,6 +367,92 @@ export const useSaveState = <
   TContext
 > => {
   return useMutation(getSaveStateMutationOptions(options));
+};
+
+/**
+ * @summary Claim or look up a player identity linked to a session
+ */
+export const getIdentifyPlayerUrl = () => {
+  return `/api/identify`;
+};
+
+export const identifyPlayer = async (
+  identifyPlayerBody: IdentifyPlayerBody,
+  options?: RequestInit,
+): Promise<IdentifyPlayerResponse> => {
+  return customFetch<IdentifyPlayerResponse>(getIdentifyPlayerUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(identifyPlayerBody),
+  });
+};
+
+export const getIdentifyPlayerMutationOptions = <
+  TError = ErrorType<IdentifyPlayerError>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof identifyPlayer>>,
+    TError,
+    { data: BodyType<IdentifyPlayerBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof identifyPlayer>>,
+  TError,
+  { data: BodyType<IdentifyPlayerBody> },
+  TContext
+> => {
+  const mutationKey = ["identifyPlayer"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof identifyPlayer>>,
+    { data: BodyType<IdentifyPlayerBody> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return identifyPlayer(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type IdentifyPlayerMutationResult = NonNullable<
+  Awaited<ReturnType<typeof identifyPlayer>>
+>;
+export type IdentifyPlayerMutationBody = BodyType<IdentifyPlayerBody>;
+export type IdentifyPlayerMutationError = ErrorType<IdentifyPlayerError>;
+
+/**
+ * @summary Claim or look up a player identity linked to a session
+ */
+export const useIdentifyPlayer = <
+  TError = ErrorType<IdentifyPlayerError>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof identifyPlayer>>,
+    TError,
+    { data: BodyType<IdentifyPlayerBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof identifyPlayer>>,
+  TError,
+  { data: BodyType<IdentifyPlayerBody> },
+  TContext
+> => {
+  return useMutation(getIdentifyPlayerMutationOptions(options));
 };
 
 /**

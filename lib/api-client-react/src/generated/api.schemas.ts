@@ -145,6 +145,27 @@ export interface LeaderboardEntry {
   completedAt: string;
 }
 
+export interface IdentifyPlayerBody {
+  /**
+   * @minLength 2
+   * @maxLength 24
+   */
+  username: string;
+  /** Present when claiming a username for a new session. Absent when looking up an existing player. */
+  sessionId?: string | null;
+}
+
+export interface IdentifyPlayerResponse {
+  sessionId: string;
+  username: string;
+  isExistingPlayer: boolean;
+}
+
+export interface IdentifyPlayerError {
+  error: string;
+  code: string;
+}
+
 export interface LeaderboardResponse {
   entries: LeaderboardEntry[];
 }

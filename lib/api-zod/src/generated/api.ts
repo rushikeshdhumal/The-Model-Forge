@@ -167,6 +167,31 @@ export const SaveStateResponse = zod.object({
 });
 
 /**
+ * @summary Claim or look up a player identity linked to a session
+ */
+export const identifyPlayerBodyUsernameMin = 2;
+export const identifyPlayerBodyUsernameMax = 24;
+
+export const IdentifyPlayerBody = zod.object({
+  username: zod
+    .string()
+    .min(identifyPlayerBodyUsernameMin)
+    .max(identifyPlayerBodyUsernameMax),
+  sessionId: zod
+    .string()
+    .nullish()
+    .describe(
+      "Present when claiming a username for a new session. Absent when looking up an existing player.",
+    ),
+});
+
+export const IdentifyPlayerResponse = zod.object({
+  sessionId: zod.string(),
+  username: zod.string(),
+  isExistingPlayer: zod.boolean(),
+});
+
+/**
  * @summary Get top completed game sessions for leaderboard
  */
 export const GetLeaderboardResponse = zod.object({

@@ -4,6 +4,7 @@ import {
   useLoadState,
   useSaveState,
   useGetLeaderboard,
+  useIdentifyPlayer,
   getLoadStateQueryKey,
   getGetLeaderboardQueryKey,
 } from "@workspace/api-client-react";
@@ -426,6 +427,11 @@ export default function Game() {
   const [restoreInput, setRestoreInput] = useState("");
   const [restoreError, setRestoreError] = useState("");
   const [codeCopied, setCodeCopied] = useState(false);
+  const [playerName, setPlayerName] = useState<string | null>(() => localStorage.getItem("modelForge_playerName"));
+  const [showIdentity, setShowIdentity] = useState(false);
+  const [identifyInput, setIdentifyInput] = useState("");
+  const [identifyError, setIdentifyError] = useState("");
+  const [identifyMode, setIdentifyMode] = useState<"new" | "returning">("new");
   const logRef = useRef<HTMLDivElement>(null);
 
   // ---- Session bootstrap ----
@@ -449,6 +455,7 @@ export default function Game() {
   );
 
   const saveStateMutation = useSaveState();
+  const identifyMutation = useIdentifyPlayer();
 
   const { data: leaderboardData } = useGetLeaderboard({
     query: { queryKey: getGetLeaderboardQueryKey() },
@@ -460,13 +467,49 @@ export default function Game() {
       setGameState(loaded);
       if (loadData.isDefault && loaded.day === 1 && loaded.eventLog.length === 0) {
         setShowTutorial(true);
+      } else if (!playerName) {
+        // Returning player without a name stored — prompt them
+        setIdentifyMode("returning");
+        setShowIdentity(true);
       }
       // Compute event for current day
       const ev = getEventForDay(loaded);
       setCurrentEvent(ev);
       setEventResolved(false);
     }
-  }, [loadData]);
+  }, [loadData]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const handleIdentify = () => {
+    const name = identifyInput.trim().toLowerCase();
+    if (name.length < 2 || name.length > 24) {
+      setIdentifyError("Name must be 2–24 characters.");
+      return;
+    }
+    if (!/^[a-z0-9_-]+$/.test(name)) {
+      setIdentifyError("Only letters, numbers, underscores, and hyphens allowed.");
+      return;
+    }
+    setIdentifyError("");
+    identifyMutation.mutate(
+      { data: { username: name, sessionId: sessionId ?? undefined } },
+      {
+        onSuccess: (result) => {
+          localStorage.setItem("modelForge_playerName", result.username);
+          setPlayerName(result.username);
+          // If this is a returning player on a different session, switch to their session
+          if (result.isExistingPlayer && result.sessionId !== sessionId) {
+            localStorage.setItem("modelForge_sessionId", result.sessionId);
+            window.location.reload();
+            return;
+          }
+          setShowIdentity(false);
+        },
+        onError: () => {
+          setIdentifyError("Something went wrong. Please try again.");
+        },
+      }
+    );
+  };
 
   useEffect(() => {
     document.documentElement.classList.add("dark");
@@ -615,7 +658,25 @@ export default function Game() {
             <h1 className="text-2xl md:text-3xl font-bold text-primary tracking-tighter leading-none">
               THE MODEL FORGE<span className="animate-pulse ml-0.5">_</span>
             </h1>
-            <p className="text-xs text-muted-foreground tracking-widest mt-0.5">ML PRODUCTION SIMULATOR</p>
+            <div className="flex items-center gap-2 mt-0.5">
+              <p className="text-xs text-muted-foreground tracking-widest">ML PRODUCTION SIMULATOR</p>
+              {playerName ? (
+                <button
+                  onClick={() => { setIdentifyMode("new"); setIdentifyInput(""); setIdentifyError(""); setShowIdentity(true); }}
+                  className="text-[10px] text-primary/70 border border-primary/25 px-1.5 py-0.5 tracking-widest hover:border-primary/50 hover:text-primary transition-colors"
+                  title="Switch player"
+                >
+                  {playerName.toUpperCase()}
+                </button>
+              ) : (
+                <button
+                  onClick={() => { setIdentifyMode("returning"); setIdentifyInput(""); setIdentifyError(""); setShowIdentity(true); }}
+                  className="text-[10px] text-muted-foreground/60 border border-border/30 px-1.5 py-0.5 tracking-widest hover:border-primary/40 hover:text-primary/70 transition-colors"
+                >
+                  SIGN IN
+                </button>
+              )}
+            </div>
           </div>
           <div className="flex flex-wrap items-center gap-2 md:gap-3">
             <div
@@ -1127,7 +1188,15 @@ export default function Game() {
           </DialogHeader>
           <DialogFooter>
             <Button
-              onClick={() => setShowTutorial(false)}
+              onClick={() => {
+                setShowTutorial(false);
+                if (!playerName) {
+                  setIdentifyMode("new");
+                  setIdentifyInput("");
+                  setIdentifyError("");
+                  setShowIdentity(true);
+                }
+              }}
               className="w-full font-bold tracking-widest"
               data-testid="button-start-game"
             >
@@ -1223,6 +1292,77 @@ export default function Game() {
               CONFIRM RESET
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Player Identity dialog */}
+      <Dialog open={showIdentity} onOpenChange={(open) => { if (!open && playerName) setShowIdentity(false); }}>
+        <DialogContent className="bg-card border-primary/30 font-mono max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="text-primary tracking-widest text-sm">
+              {identifyMode === "new" ? "IDENTIFY YOURSELF" : "WELCOME BACK"}
+            </DialogTitle>
+            <DialogDescription className="text-muted-foreground text-xs leading-relaxed">
+              {identifyMode === "new"
+                ? "Choose a player name. Your run is automatically saved under this name — type it again on any device to resume."
+                : "Enter your player name to automatically restore your saved progress."}
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-3 pt-1">
+            <div>
+              <div className="text-[10px] tracking-widest text-muted-foreground mb-1.5">PLAYER NAME</div>
+              <input
+                type="text"
+                placeholder="e.g. dr_gradient"
+                value={identifyInput}
+                autoFocus
+                maxLength={24}
+                onChange={(e) => { setIdentifyInput(e.target.value); setIdentifyError(""); }}
+                onKeyDown={(e) => { if (e.key === "Enter") handleIdentify(); }}
+                className="w-full bg-secondary/40 border border-border/40 px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground/50 outline-none focus:border-primary/50 tracking-wider"
+              />
+              <p className="text-[10px] text-muted-foreground mt-1">Letters, numbers, underscores, hyphens. 2–24 chars.</p>
+            </div>
+
+            {identifyError && (
+              <p className="text-[10px] text-destructive leading-relaxed">{identifyError}</p>
+            )}
+
+            {identifyMode === "returning" && (
+              <p className="text-[10px] text-muted-foreground border-l-2 border-primary/30 pl-2 leading-relaxed">
+                If the name exists, your saved run loads automatically. If it's new, a fresh session starts under that name.
+              </p>
+            )}
+
+            <div className="flex gap-2 pt-1">
+              <Button
+                className="flex-1 font-bold tracking-widest"
+                disabled={identifyInput.trim().length < 2 || identifyMutation.isPending}
+                onClick={handleIdentify}
+              >
+                {identifyMutation.isPending ? "CONNECTING…" : identifyMode === "new" ? "BEGIN" : "RESTORE SAVE"}
+              </Button>
+              {playerName && (
+                <Button
+                  variant="outline"
+                  className="border-border/40 text-muted-foreground hover:text-foreground text-xs"
+                  onClick={() => setShowIdentity(false)}
+                >
+                  CANCEL
+                </Button>
+              )}
+            </div>
+
+            {identifyMode === "new" && (
+              <button
+                onClick={() => { setIdentifyMode("returning"); setIdentifyInput(""); setIdentifyError(""); }}
+                className="text-[10px] text-muted-foreground hover:text-primary transition-colors w-full text-center"
+              >
+                Already have a saved game? Switch to restore mode →
+              </button>
+            )}
+          </div>
         </DialogContent>
       </Dialog>
 

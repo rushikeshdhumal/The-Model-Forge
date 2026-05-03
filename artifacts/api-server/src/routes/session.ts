@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import { randomUUID } from "crypto";
-import { eq, desc } from "drizzle-orm";
+import { eq, desc, isNotNull } from "drizzle-orm";
 import { db, sessionsTable } from "@workspace/db";
 import {
   NewSessionResponse,
@@ -9,6 +9,8 @@ import {
   SaveStateBody,
   SaveStateResponse,
   GetLeaderboardResponse,
+  IdentifyPlayerBody,
+  IdentifyPlayerResponse,
 } from "@workspace/api-zod";
 
 const router: IRouter = Router();
@@ -120,6 +122,75 @@ router.post("/save-state", async (req, res) => {
   } catch (err) {
     req.log.error({ err }, "Failed to save state");
     res.status(500).json({ error: "Failed to save state" });
+  }
+});
+
+router.post("/identify", async (req, res) => {
+  const body = IdentifyPlayerBody.parse(req.body);
+  const { username, sessionId } = body;
+
+  const normalised = username.trim().toLowerCase();
+
+  try {
+    // Look up existing record for this username
+    const existing = await db
+      .select()
+      .from(sessionsTable)
+      .where(eq(sessionsTable.username, normalised))
+      .limit(1);
+
+    if (existing.length > 0) {
+      // Username already exists — returning player
+      const row = existing[0];
+      // If caller supplied a sessionId and it's different, the username is taken
+      if (sessionId && row.sessionId !== sessionId) {
+        // Return the existing session — the frontend will switch to it
+        const data = IdentifyPlayerResponse.parse({
+          sessionId: row.sessionId,
+          username: row.username ?? normalised,
+          isExistingPlayer: true,
+        });
+        res.json(data);
+        return;
+      }
+      const data = IdentifyPlayerResponse.parse({
+        sessionId: row.sessionId,
+        username: row.username ?? normalised,
+        isExistingPlayer: true,
+      });
+      res.json(data);
+      return;
+    }
+
+    // New username — claim it on the given session (or create a fresh session)
+    const targetSessionId = sessionId ?? randomUUID();
+
+    // Ensure the session row exists before we try to set the username
+    await db
+      .insert(sessionsTable)
+      .values({
+        sessionId: targetSessionId,
+        state: { ...DEFAULT_STATE, sessionId: targetSessionId },
+        scenario: "default",
+        day: 1,
+        status: "playing",
+        wins: 0,
+        username: normalised,
+      })
+      .onConflictDoUpdate({
+        target: sessionsTable.sessionId,
+        set: { username: normalised, updatedAt: new Date() },
+      });
+
+    const data = IdentifyPlayerResponse.parse({
+      sessionId: targetSessionId,
+      username: normalised,
+      isExistingPlayer: false,
+    });
+    res.json(data);
+  } catch (err) {
+    req.log.error({ err }, "Failed to identify player");
+    res.status(500).json({ error: "Failed to identify player", code: "SERVER_ERROR" });
   }
 });
 

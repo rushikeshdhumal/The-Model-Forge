@@ -1,4 +1,4 @@
-import { pgTable, text, jsonb, timestamp, integer } from "drizzle-orm/pg-core";
+import { pgTable, text, jsonb, timestamp, integer, unique } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 
@@ -9,9 +9,10 @@ export const sessionsTable = pgTable("sessions", {
   day: integer("day").notNull().default(1),
   status: text("status").notNull().default("playing"),
   wins: integer("wins").notNull().default(0),
+  username: text("username"),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
   createdAt: timestamp("created_at").notNull().defaultNow(),
-});
+}, (t) => [unique("sessions_username_unique").on(t.username)]);
 
 export const insertSessionSchema = createInsertSchema(sessionsTable).omit({
   createdAt: true,
