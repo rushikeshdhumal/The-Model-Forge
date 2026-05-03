@@ -1141,7 +1141,9 @@ export default function Game() {
     localStorage.setItem("modelForge_sessionId", result.sessionId);
     setPlayerName(result.username);
     if (result.sessionId !== sessionId) {
-      localStorage.setItem("modelForge_skipLanding", "true");
+      if (!showLanding) {
+        localStorage.setItem("modelForge_skipLanding", "true");
+      }
       window.location.reload();
     } else {
       setShowIdentity(false);
@@ -1418,7 +1420,8 @@ export default function Game() {
   const copyGameOverSummary = () => {
     const outcome = gameState.status === "won" ? "survived" : "failed";
     const streakNote = (gameState.maxStreak ?? 0) > 0 ? ` Best streak: ${gameState.maxStreak} clean days.` : "";
-    const text = `I ${outcome} Day ${gameState.day}/14 on The Model Forge! Final: ${metricLabels.precision} ${gameState.metrics.precision.toFixed(0)}%, ${metricLabels.recall} ${gameState.metrics.recall.toFixed(0)}%, SLA ${gameState.metrics.slaAdherence.toFixed(0)}%.${streakNote} Play at ${window.location.origin}`;
+    const daysDisplay = Math.min(gameState.day - 1, 14);
+    const text = `I ${outcome} Day ${daysDisplay}/14 on The Model Forge! Final: ${metricLabels.precision} ${gameState.metrics.precision.toFixed(0)}%, ${metricLabels.recall} ${gameState.metrics.recall.toFixed(0)}%, SLA ${gameState.metrics.slaAdherence.toFixed(0)}%.${streakNote} Play at ${window.location.origin}`;
     navigator.clipboard.writeText(text).catch(() => {});
     setGameOverCopied(true);
     setTimeout(() => setGameOverCopied(false), 2000);
@@ -1557,7 +1560,7 @@ export default function Game() {
                     <span className="text-foreground/80 flex-1 truncate">
                       {e.username ?? <span className="italic text-muted-foreground/50">anonymous</span>}
                     </span>
-                    <span className="text-primary text-[11px]">Day {e.day}/14</span>
+                    <span className="text-primary text-[11px]">Day {Math.min(e.day - 1, 14)}/14</span>
                     <span className="text-muted-foreground text-[11px]">{e.scenario}</span>
                   </div>
                 );
@@ -2100,7 +2103,7 @@ export default function Game() {
                   <div>
                     <div className="text-xs font-bold">FEATURE STORE</div>
                     <div className="text-xs text-muted-foreground">
-                      {gameState.featureStore.stalenessHours}h staleness &middot;{" "}
+                      {viewState.metrics.featureStaleness.toFixed(0)}h staleness &middot;{" "}
                       {gameState.featureStore.featureVersions.join(", ")}
                     </div>
                   </div>
@@ -2591,7 +2594,7 @@ export default function Game() {
                   Each day, an incident may occur. Choose how to respond. Your decisions affect 6 production metrics.
                 </p>
                 <p>
-                  <span className="text-destructive font-bold">LOSE:</span> Any metric hits 0, or feature staleness exceeds 48 hours.
+                  <span className="text-destructive font-bold">LOSE:</span> Any metric hits 0, or feature staleness exceeds 32 hours.
                 </p>
                 <p>
                   <span className="text-primary font-bold">WIN:</span> Survive all 14 days.
