@@ -440,8 +440,14 @@ export function getEventForDay(state: GameState): GameEvent | null {
           id: "A",
           label: "Remove proxy demographic features from the training data",
           effect: (s) => {
+            // Removing features that were causing the model to score women lower eliminates the mechanism
+            // behind the false negatives on qualified female candidates. Qualified women who were previously
+            // excluded by these proxies now score higher and are surfaced → Candidate Recall IMPROVES.
+            // Precision takes a steep hit: removing features that provided discriminative signal — even biased
+            // signal — forces the model to relearn with fewer inputs. The fairness-accuracy tradeoff is real,
+            // but it manifests as a precision cost, not a recall cost.
             s.metrics.precision -= 8;
-            s.metrics.recall -= 3;
+            s.metrics.recall += 3;
             s.metrics.skew = "Low";
           },
         },
@@ -449,7 +455,14 @@ export function getEventForDay(state: GameState): GameEvent | null {
           id: "B",
           label: "Reweight training labels to balance outcomes across demographic groups",
           effect: (s) => {
+            // Outcome-balanced reweighting applies higher loss penalties to missed qualified candidates from
+            // underrepresented groups. The model is now explicitly penalized more for false negatives on women
+            // → it makes greater effort to surface qualified female candidates → Candidate Recall improves.
+            // Precision takes a smaller hit than Choice A: accepting slightly more false positives
+            // (precision-3) to reduce false negatives on underrepresented candidates is the intended
+            // fairness-accuracy tradeoff of label reweighting.
             s.metrics.precision -= 3;
+            s.metrics.recall += 4;
             s.metrics.skew = "Low";
             s.metrics.inferenceCost += 5;
           },
