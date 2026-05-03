@@ -61,49 +61,7 @@ import {
 
 // ---- Codex data ----
 
-const CODEX_METRICS = [
-  {
-    name: "PRECISION",
-    icon: "◎",
-    definition: "Of all predictions your model labels as positive, what fraction are actually positive?",
-    formula: "True Positives / (True Positives + False Positives)",
-    whyItMatters:
-      "Low precision means your model cries wolf — real users get false alarms or irrelevant recommendations, eroding trust fast.",
-    causes: [
-      "Passive decay — distributions shift daily as user behavior evolves",
-      "Overfitting to training data that doesn't match live distribution",
-      "Data poisoning contaminating the training pipeline",
-      "Concept drift making previously valid signals noise",
-    ],
-    recovery: [
-      "Retrain on a fresh dataset with a larger, more representative sample",
-      "Promote a staged model that was trained more recently",
-      "Add a validation set that better mirrors production distribution",
-      "Enable CI/CD auto-retraining to keep the model current",
-    ],
-    lossThreshold: "≤ 0%",
-  },
-  {
-    name: "RECALL",
-    icon: "◉",
-    definition: "Of all actual positives in the world, what fraction does your model successfully detect?",
-    formula: "True Positives / (True Positives + False Negatives)",
-    whyItMatters:
-      "Low recall means you're missing real signals. In fraud detection, that's undetected fraud. In medical AI, that's missed diagnoses. The cost of missing positives is often higher than false alarms.",
-    causes: [
-      "Overfitting that tunes precision while sacrificing recall on rare classes",
-      "Concept drift changing what a 'positive' looks like in production",
-      "Data imbalance — the model under-learns the minority class",
-      "Passive decay as distribution slowly shifts away from training baseline",
-    ],
-    recovery: [
-      "Adjust the classification threshold (lower it to catch more positives)",
-      "Retrain with oversampled minority-class examples",
-      "Switch to a model type better suited to imbalanced data (e.g. Ensemble)",
-      "Add recall as an explicit optimization target alongside precision",
-    ],
-    lossThreshold: "≤ 0%",
-  },
+const CODEX_STATIC_METRICS = [
   {
     name: "SLA ADHERENCE",
     icon: "◈",
@@ -144,7 +102,7 @@ const CODEX_METRICS = [
       "Run an emergency feature refresh (one-time reset)",
       "Fix the upstream pipeline delay event to restore normal cadence",
     ],
-    lossThreshold: "> 48h",
+    lossThreshold: "> 36h",
   },
   {
     name: "INFERENCE COST",
@@ -190,6 +148,417 @@ const CODEX_METRICS = [
     lossThreshold: "N/A — High skew degrades all other metrics",
   },
 ];
+
+function getCodexMetrics(scenario: string) {
+  const labels = getMetricLabels(scenario);
+
+  type MetricEntry = {
+    definition: string;
+    formula: string;
+    whyItMatters: string;
+    causes: string[];
+    recovery: string[];
+  };
+
+  const PRECISION_BY_SCENARIO: Record<string, MetricEntry> = {
+    default: {
+      definition: "Of all predictions your model labels as positive, what fraction are actually positive?",
+      formula: "True Positives / (True Positives + False Positives)",
+      whyItMatters: "Low precision means your model cries wolf — real users get false alarms or irrelevant results, eroding trust fast.",
+      causes: [
+        "Passive decay — distributions shift daily as user behavior evolves",
+        "Overfitting to training data that doesn't match live distribution",
+        "Data poisoning contaminating the training pipeline",
+        "Concept drift making previously valid signals noise",
+      ],
+      recovery: [
+        "Retrain on a fresh dataset with a larger, more representative sample",
+        "Promote a staged model that was trained more recently",
+        "Add a validation set that better mirrors production distribution",
+        "Enable CI/CD auto-retraining to keep the model current",
+      ],
+    },
+    tesla: {
+      definition: "Of all objects your vision model flags as obstacles, what fraction are real obstacles? False positives trigger phantom brakes.",
+      formula: "True Detections / (True Detections + False Alarms)",
+      whyItMatters: "Phantom braking from false positives creates rear-end collision risk and destroys driver trust. Tesla's Autopilot approval depends on this number staying high — regulators measure false alarm rates directly.",
+      causes: [
+        "Adversarial weather (fog, glare, snow) creating spurious object boundaries",
+        "Domain shift from simulation to real-world sensor data",
+        "Sensor calibration drift after vehicle wear and tear",
+        "Poorly labeled training samples introducing systematic false positives",
+      ],
+      recovery: [
+        "Retrain with diverse weather and lighting edge cases",
+        "Apply hard negative mining on false-positive-heavy scenarios",
+        "Use ensemble voting across multiple sensor modalities to reduce false alarms",
+        "Run GradCAM analysis to identify which visual features are triggering false detections",
+      ],
+    },
+    zillow: {
+      definition: "What percentage of home price estimates fall within ±5% of the final sale price? Coverage Index measures estimate accuracy at scale.",
+      formula: "Properties with |estimate − sale_price| < 5% / Total listed",
+      whyItMatters: "Buyers anchor on the Zestimate. Estimates off by >5% systematically distort offers — sellers are underpaid, buyers overbid. Zillow's 2021 iBuying collapse lost $500M directly because this degraded while the model bought homes at scale.",
+      causes: [
+        "Macro interest rate shifts breaking the price-feature relationship learned at training time",
+        "Geographic expansion into markets under-represented in training data",
+        "Missing renovation signals that buyers factor into mental valuation",
+        "Concept drift as pandemic-era pricing patterns don't generalize post-lockdown",
+      ],
+      recovery: [
+        "Retrain with geographically diverse and recency-weighted data",
+        "Add macro economic indicators (rates, inventory, days-on-market) as features",
+        "Weight recent comparable sales more heavily than historical averages",
+        "Enable CI/CD to retrain monthly as market conditions shift",
+      ],
+    },
+    uber: {
+      definition: "How accurately does the surge model predict actual ride demand in each geographic zone? Demand Index is 1 minus mean absolute percentage error.",
+      formula: "1 − Mean Absolute Percentage Error vs. ground-truth demand",
+      whyItMatters: "Overestimating demand deploys too many drivers to dead zones, burning driver earnings. Underestimating means rider ETAs spike and surge multipliers explode — both drive churn to Lyft. The surge price is directly derived from this prediction.",
+      causes: [
+        "Sudden events (concerts, weather, sports) not in training distribution",
+        "Concept drift as commute patterns shift post-pandemic",
+        "Feature staleness — demand predictions using hours-old GPS data",
+        "Overfitting to historical hotspots that no longer match live demand",
+      ],
+      recovery: [
+        "Retrain with event-enriched data (venue schedules, weather, local calendar)",
+        "Reduce feature staleness — demand signals decay within minutes",
+        "Use separate models per city cluster rather than one global model",
+        "Enable CI/CD to retrain daily on the last 30 days of trip data",
+      ],
+    },
+    netflix: {
+      definition: "Of all items shown in the top-N recommendation slots, what fraction does the user actually watch? Engagement Rate is Precision@N.",
+      formula: "Watched items in top-N / N (Precision@N)",
+      whyItMatters: "Irrelevant titles in the hero row cause scroll fatigue — users lose trust and skip to search. Netflix's internal metric 'took-rate' tracks exactly this. A 1% drop in Engagement Rate at Netflix's scale is millions of abandoned sessions.",
+      causes: [
+        "Concept drift — COVID lockdown patterns made pre-pandemic models stale overnight",
+        "Popularity bias causing the model to over-recommend already-watched content",
+        "Cold-start problem for new releases without enough interaction data",
+        "Feature staleness — recommendations built on stale viewing history",
+      ],
+      recovery: [
+        "Retrain with a recency window that down-weights pre-shift behavior",
+        "Add popularity-penalization to reduce filter bubbles",
+        "Promote a staged model trained on the last 30 days of engagement",
+        "Enable CI/CD auto-retraining to track shifting taste in near real-time",
+      ],
+    },
+    google: {
+      definition: "Of the top-K search results returned, what fraction are rated relevant by independent quality evaluators? Relevance Score is Precision@K.",
+      formula: "Relevant results in top-K / K (Precision@K)",
+      whyItMatters: "A single irrelevant result at position 1 causes 5–10% query reformulation. Historically, a sustained Precision drop at P1 correlates with users switching to Bing for vertical queries. Relevance is Google's core product promise.",
+      causes: [
+        "LLM-generated content flooding the index and confusing quality signals",
+        "SEO manipulation exploiting ranking signals not caught by spam filters",
+        "Concept drift as search intent semantics evolve faster than training frequency",
+        "Feature staleness on real-time signals (freshness, click-through) used at ranking",
+      ],
+      recovery: [
+        "Retrain with human-rated relevance labels from recent query logs",
+        "Update spam filters to catch the latest content-farm patterns",
+        "Refresh real-time ranking features — freshness signals decay fast",
+        "Enable CI/CD to retrain on the last 7 days of search log data",
+      ],
+    },
+    facebook: {
+      definition: "Of the ads your model serves, what fraction receive meaningful engagement (click, video view, or conversion)? Relevance Score measures ad quality at impression.",
+      formula: "Engaged ad impressions / Total ad impressions",
+      whyItMatters: "Irrelevant ads cost advertisers real money and train users to mentally filter the entire ad surface — destroying long-term ad inventory value. Facebook's Relevance Score directly sets advertiser CPM in the auction.",
+      causes: [
+        "Concept drift as user interests shift seasonally or post-major-events",
+        "Creative fatigue — the same ad shown repeatedly tanks engagement",
+        "Audience targeting drift when user behavior diverges from profile signals",
+        "BGP or infrastructure failures causing delayed auction signals",
+      ],
+      recovery: [
+        "Retrain with recent engagement logs that reflect current user behavior",
+        "Add creative-fatigue signals as a ranking feature",
+        "Fix upstream infrastructure issues — stale auction signals corrupt ranking",
+        "Promote a staged model trained on the last 14 days of ad engagement",
+      ],
+    },
+    twitter: {
+      definition: "Of tweets your model predicts will receive high engagement, what fraction actually do? Engagement Score is Precision@N on the ranked timeline.",
+      formula: "Truly high-engagement tweets in top-N / N (Precision@N)",
+      whyItMatters: "Over-predicting engagement inflates the timeline with low-quality viral bait, reducing signal quality. Twitter's algorithmic timeline credibility — especially post-2022 when ranking became visible — depends on this being accurate. Users who lose trust switch to chronological order.",
+      causes: [
+        "Concept drift — breaking news signals look identical to manufactured engagement",
+        "Engagement farming bots inflating interaction counts during training",
+        "Popularity bias rewarding already-viral content regardless of quality",
+        "Feature staleness — engagement signals at time-of-posting age rapidly",
+      ],
+      recovery: [
+        "Retrain with bot-filtered engagement labels from trusted accounts",
+        "Add engagement velocity signals (rate of growth, not raw count) as features",
+        "Reduce feature staleness — timeline ranking signals are real-time by nature",
+        "Use separate models for breaking news vs. evergreen content",
+      ],
+    },
+    tay: {
+      definition: "Of all responses Tay generates, what fraction are semantically coherent and contextually appropriate to the conversation?",
+      formula: "Human-rated coherent responses / Total responses (sampled evaluation)",
+      whyItMatters: "Incoherent responses destroy the illusion of intelligence and expose the model as unreliable. Tay's outputs became incoherent within 16 hours of launch — a direct consequence of adversarial poisoning degrading generation quality. Microsoft's reputational damage was permanent.",
+      causes: [
+        "Adversarial inputs training the model on incoherent or toxic response patterns",
+        "Concept drift as conversation topics shift away from training distribution",
+        "Data poisoning through coordinated user injection of malicious training signals",
+        "Context window overflow causing responses to lose conversation thread",
+      ],
+      recovery: [
+        "Retrain on a curated, filtered dataset with adversarial examples removed",
+        "Implement input validation to reject known adversarial prompt patterns",
+        "Add a coherence classifier gating outputs before they reach users",
+        "Enable CI/CD to retrain frequently on human-verified conversation logs",
+      ],
+    },
+    amazon: {
+      definition: "Of all transactions your model flags as fraudulent, what fraction are genuinely fraudulent? False positives block legitimate purchases.",
+      formula: "True Positives / (True Positives + False Positives)",
+      whyItMatters: "At Amazon's transaction volume, a 1% precision drop is millions of wrongly-blocked purchases. False positives frustrate customers at checkout, drive chargebacks to live support, and erode trust in Amazon Pay for international transactions.",
+      causes: [
+        "Concept drift — new legitimate payment patterns being misclassified as fraud",
+        "Geographic expansion without fraud models trained on local behavior",
+        "Data poisoning introducing false positives into the fraud training labels",
+        "Feature staleness — risk signals based on stale device or session fingerprints",
+      ],
+      recovery: [
+        "Retrain with recent transaction data weighted toward new legitimate patterns",
+        "Adjust the fraud classification threshold upward to reduce false positives",
+        "Add geographic context features to distinguish regional legitimate patterns",
+        "Enable CI/CD to retrain weekly — fraud patterns evolve rapidly",
+      ],
+    },
+    stripe: {
+      definition: "Of all transactions your model flags as fraudulent, what fraction are actually fraudulent? False positives block legitimate business revenue.",
+      formula: "True Positives / (True Positives + False Positives)",
+      whyItMatters: "False positives at Stripe directly harm small businesses — blocking a startup's largest customer transaction can be existential. Stripe's value proposition is frictionless global payments; precision failures destroy that promise.",
+      causes: [
+        "New merchant categories not in training distribution being over-flagged",
+        "International transactions triggering domestic fraud signals incorrectly",
+        "Concept drift as payment card norms evolve across markets",
+        "Feature staleness — velocity signals based on stale transaction windows",
+      ],
+      recovery: [
+        "Retrain with merchant-category-stratified data to reduce category bias",
+        "Adjust the classification threshold by region and merchant type",
+        "Add merchant reputation signals as features to reduce false positive rates",
+        "Enable CI/CD for weekly retraining — fraud and legitimate patterns both evolve",
+      ],
+    },
+  };
+
+  const RECALL_BY_SCENARIO: Record<string, MetricEntry> = {
+    default: {
+      definition: "Of all actual positives in the world, what fraction does your model successfully detect?",
+      formula: "True Positives / (True Positives + False Negatives)",
+      whyItMatters: "Low recall means you're missing real signals. The cost of missing positives is often higher than false alarms — especially in safety-critical or high-value scenarios.",
+      causes: [
+        "Overfitting that tunes precision while sacrificing recall on rare classes",
+        "Concept drift changing what a 'positive' looks like in production",
+        "Data imbalance — the model under-learns the minority class",
+        "Passive decay as distribution slowly shifts away from training baseline",
+      ],
+      recovery: [
+        "Adjust the classification threshold downward to catch more positives",
+        "Retrain with oversampled minority-class examples",
+        "Switch to a model type better suited to imbalanced data (e.g. Ensemble)",
+        "Add recall as an explicit optimization target alongside precision",
+      ],
+    },
+    tesla: {
+      definition: "Of all real obstacles in the scene, what fraction does your model successfully detect before the vehicle reaches them? Missing one is a safety-critical failure.",
+      formula: "True Detections / (True Detections + Missed Obstacles)",
+      whyItMatters: "Missing a real obstacle means the vehicle may not brake. This is not a quality issue — it is a fatality risk. Tesla's 2022 recall of 344,000 vehicles was triggered by false negatives on partially occluded pedestrians. Detection Recall is the metric regulators use to approve autonomous systems.",
+      causes: [
+        "Model undertrained on occluded or partially visible objects",
+        "Adverse weather (rain, snow, direct sunlight) washing out sensor signals",
+        "Night-time and backlit scenarios under-represented in training data",
+        "Rare obstacle types (animals, debris, emergency vehicles) never seen at training time",
+      ],
+      recovery: [
+        "Retrain with a dataset heavily augmented with edge-case scenarios",
+        "Use sensor fusion (camera + radar + lidar) to compensate for any single sensor's misses",
+        "Lower the detection confidence threshold — in safety systems, prefer false alarms to misses",
+        "Run saliency map analysis to identify blind spots in the model's attention",
+      ],
+    },
+    zillow: {
+      definition: "What fraction of listed properties receive any estimate at all? Coverage Rate measures how broadly the model can be applied across the full inventory.",
+      formula: "Properties with estimates / Total listed properties",
+      whyItMatters: "Low coverage means the model only prices well-represented homes and abandons the rest to expensive human appraisal. It also biases the market — homes without Zestimates sell slower and at lower prices, creating systemic inequity in who benefits from algorithmic pricing.",
+      causes: [
+        "Model refusing to predict on properties too unlike the training set",
+        "Geographic sparsity — new markets with too few comparables",
+        "Missing features causing the model to abstain rather than estimate",
+        "Hard confidence thresholds filtering out uncertain predictions",
+      ],
+      recovery: [
+        "Retrain with geographically broader data to extend model confidence",
+        "Use uncertainty quantification to provide range estimates rather than refusing",
+        "Add neighboring-market data as proxy features for sparse geographies",
+        "Lower the confidence threshold with a wider prediction interval shown to users",
+      ],
+    },
+    uber: {
+      definition: "Of all high-demand zones in the city at a given moment, what fraction does the surge model correctly identify in time to deploy drivers?",
+      formula: "Correctly-flagged demand zones / All actual high-demand zones",
+      whyItMatters: "Missing a demand spike means drivers aren't where riders are — ETAs spike, surge prices explode, and riders churn to Lyft. Recall matters most during events: airports at holiday peaks, post-concert surges, sudden weather. These are high-value moments where missed coverage loses the most revenue.",
+      causes: [
+        "Events not in training data — the model has never seen this demand signature",
+        "Feature staleness — demand signals using GPS data that is hours old",
+        "Geographic distribution shift as the city's demand patterns evolve",
+        "Concept drift post-pandemic as commute patterns changed permanently",
+      ],
+      recovery: [
+        "Add event-calendar features so the model anticipates known demand spikes",
+        "Reduce feature staleness — demand signals need sub-minute freshness",
+        "Increase model sensitivity on underserved high-demand zone types",
+        "Enable CI/CD daily retraining on recent trip data from the last 30 days",
+      ],
+    },
+    netflix: {
+      definition: "What fraction of a user's demonstrated taste profile is covered by the current recommendations? Diversity Score prevents filter bubbles and long-term engagement collapse.",
+      formula: "Unique taste clusters served / User's total identified taste clusters",
+      whyItMatters: "A model optimized purely for short-term take-rate will over-serve genres already watched, creating a feedback loop that bores users over weeks. Netflix's long-term retention depends on surfacing content outside the user's current loop — Diversity Score is what keeps a subscriber renewing month 7.",
+      causes: [
+        "Popularity bias concentrating recommendations on already-successful titles",
+        "Filter bubble from over-fitting to recent watch history at the expense of broader taste",
+        "Cold-start failure for new content categories with no engagement history",
+        "Collaborative filtering collapse where all users in a cluster get identical recommendations",
+      ],
+      recovery: [
+        "Add diversity regularization directly into the loss function",
+        "Implement exploration slots in the recommendation grid (e.g. 1-in-10 is deliberate exploration)",
+        "Use content-based signals alongside collaborative filtering to break filter bubbles",
+        "Promote a staged model with explicit diversity constraints built in",
+      ],
+    },
+    google: {
+      definition: "Of all genuinely relevant documents in the index for a query, what fraction make it into the top-K results? Coverage Index measures how completely the search serves each query's information space.",
+      formula: "Relevant retrieved in top-K / All relevant in corpus (Recall@K)",
+      whyItMatters: "Low recall means niche and expert queries return incomplete results — the gaps competitors fill. It also drives dependency on Bing, DuckDuckGo, or vertical-specific tools for queries your index doesn't fully cover. At Google scale, a 1% recall drop on the long tail is billions of underserved queries.",
+      causes: [
+        "Index freshness issues — newly published relevant content not yet crawled",
+        "Ranking bias toward high-PageRank domains over genuinely relevant smaller sources",
+        "Semantic mismatch between query intent and document representation",
+        "Feature staleness on freshness signals preventing newly-relevant content from surfacing",
+      ],
+      recovery: [
+        "Improve crawl freshness for the long tail of the web",
+        "Add semantic embeddings to bridge query-document vocabulary gaps",
+        "Retrain with query-document relevance pairs that cover underserved query types",
+        "Promote a staged model that scores long-tail coverage alongside precision",
+      ],
+    },
+    facebook: {
+      definition: "Of all ads objectively relevant to a user session, what fraction does your model surface before the auction budget is exhausted? Feed Recall measures advertiser reach efficiency.",
+      formula: "Relevant ads actually served / All relevant ads available to serve",
+      whyItMatters: "Advertisers with limited budgets may never reach their target audience if the ranker misses their relevant impressions early in the auction. Low recall in ad delivery means real revenue loss for small-budget advertisers — the ones who can't afford frequency capping and rely on Feed Recall to exist in the auction at all.",
+      causes: [
+        "Auction bias toward large-budget advertisers crowding out relevant small campaigns",
+        "Relevance score miscalibration causing borderline-relevant ads to not bid",
+        "Infrastructure failures (BGP routing, data center outages) killing impression delivery",
+        "Feature staleness making ad targeting signals stale and reducing bid eligibility",
+      ],
+      recovery: [
+        "Recalibrate relevance thresholds to prevent under-bidding on relevant small campaigns",
+        "Fix upstream infrastructure — routing failures are the most common cause of recall collapse",
+        "Add pacing signals to ensure budget-constrained campaigns aren't frontloaded out of reach",
+        "Retrain the relevance model on recent engagement to update targeting signal freshness",
+      ],
+    },
+    twitter: {
+      definition: "Of all genuinely high-engagement content available in a user's network, what fraction does the model surface before the engagement window closes? Reach Index measures completeness of the ranked timeline.",
+      formula: "Correctly surfaced high-engagement content / All actually-viral content in user's graph",
+      whyItMatters: "Breaking news and cultural moments have a 15–60 minute engagement window. Missing them means your algorithm lags the conversation — users switch to chronological order or competing platforms to find what's happening. Reach Index is what makes the algorithmic timeline feel alive vs. delayed.",
+      causes: [
+        "Temporal decay in ranking — fresh content scored by stale engagement signals",
+        "Graph sparsity for new users whose network hasn't generated enough signal",
+        "Feature staleness — viral signals take time to propagate through the engagement pipeline",
+        "Popularity bias causing the model to resurface already-seen viral content over new signals",
+      ],
+      recovery: [
+        "Add content velocity features (engagement rate-of-change, not raw count)",
+        "Reduce feature staleness — viral signals need near-real-time propagation",
+        "Use a separate breaking-news model with a shorter lookback window",
+        "Lower the surfacing threshold for content from accounts with historically high Reach Index",
+      ],
+    },
+    tay: {
+      definition: "Of all potentially harmful, toxic, or off-policy outputs your safety system could catch, what fraction are filtered before reaching users? Safety Score measures the completeness of your content safety pipeline.",
+      formula: "Filtered harmful outputs / All harmful outputs attempted (sampled red-team evaluation)",
+      whyItMatters: "Every harmful response Tay emits becomes a screenshot and a headline. Missing harmful content has asymmetric consequences — one viral toxic tweet was sufficient to cause Tay's complete shutdown within 16 hours of launch. Safety Score recall is the single most important metric for any publicly-deployed generative model.",
+      causes: [
+        "Adversarial users crafting prompts that bypass filter training distribution",
+        "New slurs, coded language, or dog-whistles not in the safety classifier's vocabulary",
+        "Context-dependent toxicity that requires multi-turn conversation understanding",
+        "Safety classifier overfitting to known attack patterns while missing novel ones",
+      ],
+      recovery: [
+        "Continuously red-team the model with adversarial prompt libraries",
+        "Add a secondary safety classifier trained specifically on adversarial bypass attempts",
+        "Implement a human review queue for low-confidence safety decisions",
+        "Retrain with the latest adversarial examples — attack patterns evolve faster than the model",
+      ],
+    },
+    amazon: {
+      definition: "Of all genuinely fraudulent transactions, what fraction does your model catch before the transaction completes and the money moves?",
+      formula: "True Positives / (True Positives + False Negatives)",
+      whyItMatters: "Each missed fraud is a real loss — absorbed by Amazon or disputed back via chargeback. At Amazon's scale, a single percentage point in recall is worth hundreds of millions annually in fraud absorption. More importantly, uncaught fraud funds further attacks, creating compounding exposure.",
+      causes: [
+        "Novel fraud patterns not present in training data",
+        "Data imbalance — fraud is rare, so the model under-learns the minority class",
+        "Feature staleness — fraud velocity signals based on stale transaction windows",
+        "Concept drift as fraud rings adapt their techniques to evade the current model",
+      ],
+      recovery: [
+        "Retrain with oversampled fraud examples and synthetic fraud augmentation",
+        "Lower the fraud detection threshold — at Amazon's scale, false positives are manageable",
+        "Add real-time velocity features: transactions per device per minute, IP reputation",
+        "Enable CI/CD weekly retraining — fraud patterns evolve in direct response to your model",
+      ],
+    },
+    stripe: {
+      definition: "Of all actual fraud attempts processed through Stripe, what fraction does your model catch before the transaction settles and the network fine is issued?",
+      formula: "True Positives / (True Positives + False Negatives)",
+      whyItMatters: "Missed fraud at Stripe costs the dispute resolution, the refund, the Visa/Mastercard network fine, and the long-term reputational loss with that merchant. At scale, recall efficiency directly determines Stripe's fraud economics — and fraud rings actively probe for the recall boundary.",
+      causes: [
+        "Fraud pattern evolution — rings adapt specifically to evade the current model",
+        "New card BINs or payment corridors not in training distribution",
+        "Data imbalance in the training set — genuine fraud is rare and hard to label",
+        "Feature staleness on velocity signals — real-time risk requires sub-second feature freshness",
+      ],
+      recovery: [
+        "Implement ensemble models: one conservative (high recall), one precise (low FP rate)",
+        "Add card BIN reputation and issuer-country risk as real-time features",
+        "Lower the fraud threshold during high-risk periods (flash sales, new merchant categories)",
+        "Enable CI/CD weekly retraining — Stripe's fraud landscape shifts with every fraud-ring bust",
+      ],
+    },
+  };
+
+  const precisionContent = PRECISION_BY_SCENARIO[scenario] ?? PRECISION_BY_SCENARIO.default;
+  const recallContent = RECALL_BY_SCENARIO[scenario] ?? RECALL_BY_SCENARIO.default;
+
+  return [
+    {
+      name: labels.precision,
+      icon: "◎",
+      ...precisionContent,
+      lossThreshold: "≤ 0%",
+    },
+    {
+      name: labels.recall,
+      icon: "◉",
+      ...recallContent,
+      lossThreshold: "≤ 0%",
+    },
+    ...CODEX_STATIC_METRICS,
+  ];
+}
 
 const CODEX_CONCEPTS = [
   {
@@ -262,7 +631,7 @@ const CODEX_WIN_LOSS = [
   { label: "Precision ≤ 0%", type: "loss", note: "Model outputs are effectively random. Immediate retrain or rollback required." },
   { label: "Recall ≤ 0%", type: "loss", note: "Model detects nothing. Complete miss rate on all positive cases." },
   { label: "SLA Adherence ≤ 0%", type: "loss", note: "Complete production outage. No inference requests are completing." },
-  { label: "Feature Staleness > 48h", type: "loss", note: "Features are 2+ days old. Model is predicting on a distribution that no longer exists." },
+  { label: "Feature Staleness > 36h", type: "loss", note: "Features are 36+ hours old. The model is predicting on a distribution that no longer exists — training-serving skew is catastrophic." },
   { label: "Inference Cost ≥ 100", type: "loss", note: "Infrastructure budget exhausted. The cluster shuts down." },
   { label: "Survive all 14 days", type: "win", note: "You maintained production without a critical outage. Congratulations — most models don't." },
 ];
@@ -2166,7 +2535,7 @@ export default function Game() {
             {/* ---- METRICS TAB ---- */}
             {codexSection === "metrics" && (
               <>
-                {CODEX_METRICS.map((m) => (
+                {getCodexMetrics(gameState.scenario).map((m) => (
                   <details key={m.name} className="group border border-border/40 open:border-primary/30">
                     <summary className="flex items-center gap-2 px-3 py-2.5 cursor-pointer select-none list-none hover:bg-primary/5 transition-colors">
                       <span className="text-primary text-sm">{m.icon}</span>
@@ -2277,12 +2646,12 @@ export default function Game() {
                   <div className="text-[10px] tracking-widest text-muted-foreground mb-3">PASSIVE DECAY (PER TURN)</div>
                   <div className="space-y-1.5 text-xs">
                     {[
-                      ["Precision", "−1% per day"],
-                      ["Recall", "−1% per day"],
+                      [metricLabels.precision, "−1% per day"],
+                      [metricLabels.recall, "−1% per day"],
                       ["SLA Adherence", "−0.5% per day"],
                       ["Feature Staleness", "+2h per day (Feature Store OFF)"],
                       ["Feature Staleness", "Reset to 2h per day (Feature Store ON)"],
-                      ["Precision (CI/CD ON)", "+2% per day (offsets natural decay)"],
+                      [`${metricLabels.precision} (CI/CD ON)`, "+2% per day (offsets natural decay)"],
                     ].map(([label, value], i) => (
                       <div key={i} className="flex justify-between border-b border-border/20 pb-1">
                         <span className="text-muted-foreground">{label}</span>
