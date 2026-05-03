@@ -264,20 +264,20 @@ function getCodexMetrics(scenario: string) {
       ],
     },
     facebook: {
-      definition: "Of the ads your model serves, what fraction receive meaningful engagement (click, video view, or conversion)? Relevance Score measures ad quality at impression.",
-      formula: "Engaged ad impressions / Total ad impressions",
-      whyItMatters: "Irrelevant ads cost advertisers real money and train users to mentally filter the entire ad surface — destroying long-term ad inventory value. Facebook's Relevance Score directly sets advertiser CPM in the auction.",
+      definition: "Of all posts your model ranks in the top positions of a user's News Feed, what fraction does the user meaningfully engage with (like, share, click, or comment)? Relevance Score measures feed content quality at ranking time.",
+      formula: "Engaged posts in top-N / N (Precision@N on the News Feed ranking)",
+      whyItMatters: "Irrelevant posts in the top feed positions teach users to scroll past the algorithmic feed entirely. The 2021 BGP outage took the feed ranking model offline for 6 hours — during that window every user's feed was degraded or absent. At Facebook's scale, a 1% precision drop in feed relevance translates to hundreds of millions of degraded daily active sessions.",
       causes: [
-        "Concept drift as user interests shift seasonally or post-major-events",
-        "Creative fatigue — the same ad shown repeatedly tanks engagement",
-        "Audience targeting drift when user behavior diverges from profile signals",
-        "BGP or infrastructure failures causing delayed auction signals",
+        "Concept drift as user interests shift post-major-events or seasonally",
+        "Engagement farming — low-quality viral content scores high on the raw engagement proxy",
+        "Infrastructure failure (BGP routing, data center outage) taking the ranking model offline",
+        "Feature staleness when the serving pipeline goes down and ranking signals can't refresh",
       ],
       recovery: [
-        "Retrain with recent engagement logs that reflect current user behavior",
-        "Add creative-fatigue signals as a ranking feature",
-        "Fix upstream infrastructure issues — stale auction signals corrupt ranking",
-        "Promote a staged model trained on the last 14 days of ad engagement",
+        "Retrain with recent engagement logs weighted toward quality signals, not raw engagement counts",
+        "Stage a pre-warmed fallback model in staging BEFORE any infrastructure event",
+        "Implement circuit breakers that serve a degraded chronological feed during ranking outages",
+        "Promote a staged model trained on the last 14 days of diverse engagement signals",
       ],
     },
     twitter: {
@@ -454,20 +454,20 @@ function getCodexMetrics(scenario: string) {
       ],
     },
     facebook: {
-      definition: "Of all ads objectively relevant to a user session, what fraction does your model surface before the auction budget is exhausted? Feed Recall measures advertiser reach efficiency.",
-      formula: "Relevant ads actually served / All relevant ads available to serve",
-      whyItMatters: "Advertisers with limited budgets may never reach their target audience if the ranker misses their relevant impressions early in the auction. Low recall in ad delivery means real revenue loss for small-budget advertisers — the ones who can't afford frequency capping and rely on Feed Recall to exist in the auction at all.",
+      definition: "Of all genuinely engaging posts available in a user's network graph, what fraction does the News Feed model surface before the session ends? Feed Recall measures how completely the ranking covers a user's relevant network activity.",
+      formula: "Engaging posts surfaced in session / All engaging posts available in user's network graph",
+      whyItMatters: "Facebook's 2021 BGP outage took feed ranking offline for 6 hours — every post in every user's network was effectively missed. Low Feed Recall means friends' announcements, live events, and breaking news disappear into the unseen tail of the feed. Users who chronically miss social moments from their network churn to Instagram or TikTok.",
       causes: [
-        "Auction bias toward large-budget advertisers crowding out relevant small campaigns",
-        "Relevance score miscalibration causing borderline-relevant ads to not bid",
-        "Infrastructure failures (BGP routing, data center outages) killing impression delivery",
-        "Feature staleness making ad targeting signals stale and reducing bid eligibility",
+        "Infrastructure failure (BGP routing, data center outage) taking the ranking model offline entirely",
+        "No circuit breaker — the system serves no feed rather than a degraded chronological feed",
+        "Feature staleness — engagement signals for fresh posts cannot propagate when the pipeline is down",
+        "Serving cluster overload causing ranking to abort before processing the full candidate set",
       ],
       recovery: [
-        "Recalibrate relevance thresholds to prevent under-bidding on relevant small campaigns",
-        "Fix upstream infrastructure — routing failures are the most common cause of recall collapse",
-        "Add pacing signals to ensure budget-constrained campaigns aren't frontloaded out of reach",
-        "Retrain the relevance model on recent engagement to update targeting signal freshness",
+        "Stage a pre-warmed lightweight fallback model in production BEFORE the next infrastructure event",
+        "Implement circuit breakers that serve a chronological feed when the ranker is unreachable",
+        "Add health checks on the feed serving pipeline so recall drops immediately surface as alerts",
+        "Retrain on recent diverse engagement to improve coverage of varied post types and network sizes",
       ],
     },
     twitter: {
@@ -573,8 +573,8 @@ const CODEX_CONCEPTS = [
     term: "CI/CD AUTO-RETRAIN",
     icon: "⬢",
     explanation:
-      "A continuous integration and deployment pipeline that automatically retrains your model on a schedule or when drift is detected, runs validation tests, and promotes the new model to staging. In the game, enabling it adds +2% Precision per day — simulating the benefit of keeping your model current.",
-    benefit: "+2% Precision per day. Counters concept drift automatically over time.",
+      "A continuous integration and deployment pipeline that automatically retrains your model on a schedule or when drift is detected, runs validation tests, and promotes the new model to staging. In the game, enabling it adds +2% Precision and +1% Recall per day — simulating the benefit of keeping the model current on both quality dimensions.",
+    benefit: "+2% Precision and +1% Recall per day. Counters concept drift across both quality dimensions automatically.",
     cost: "Increased Inference Cost from compute for retraining runs.",
   },
   {
@@ -996,8 +996,18 @@ export default function Game() {
         break;
       case "tesla":
         base.metrics = { ...base.metrics, recall: 72 };
+        base.registry = {
+          ...base.registry,
+          models: [{ id: "model_v1", type: "Neural Network", version: "1.0", stage: "production", trainedOnDay: 0, dataVersion: "dataset_autopilot_v8", accuracy: 91, cost: 0.20, latency: 22, explainability: "Low" }],
+        };
         break;
       case "tay":
+        base.metrics = { ...base.metrics, skew: "Medium" };
+        base.registry = {
+          ...base.registry,
+          models: [{ id: "model_v1", type: "Neural Network", version: "1.0", stage: "production", trainedOnDay: 0, dataVersion: "dataset_conversations_v1", accuracy: 79, cost: 0.15, latency: 20, explainability: "Low" }],
+        };
+        break;
       case "stripe":
       case "amazon":
       case "twitter":
@@ -1018,8 +1028,18 @@ export default function Game() {
         };
         break;
       case "netflix":
+        base.metrics = { ...base.metrics, precision: 78 };
+        base.registry = {
+          ...base.registry,
+          models: [{ id: "model_v1", type: "Neural Network", version: "1.0", stage: "production", trainedOnDay: 0, dataVersion: "dataset_engagement_v3", accuracy: 82, cost: 0.16, latency: 20, explainability: "Low" }],
+        };
+        break;
       case "google":
         base.metrics = { ...base.metrics, precision: 78 };
+        base.registry = {
+          ...base.registry,
+          models: [{ id: "model_v1", type: "Neural Network", version: "1.0", stage: "production", trainedOnDay: 0, dataVersion: "dataset_search_quality_v12", accuracy: 84, cost: 0.24, latency: 28, explainability: "Low" }],
+        };
         break;
     }
     return base;

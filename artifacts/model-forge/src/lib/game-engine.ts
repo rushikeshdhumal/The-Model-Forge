@@ -58,6 +58,7 @@ function advanceDay(s: GameState): GameState {
 
   if (s.ciCd.autoRetrain) {
     s.metrics.precision = Math.min(100, s.metrics.precision + 2);
+    s.metrics.recall = Math.min(100, s.metrics.recall + 1);
     // Retraining runs consume compute — reflected in cost index
     s.metrics.inferenceCost = Math.min(100, s.metrics.inferenceCost + 2);
   }
@@ -1155,7 +1156,7 @@ export function generateDailyBrief(state: GameState): DailyBriefData | null {
       diagnosis = `CRITICAL: ${labels.precision} at ${m.precision.toFixed(0)}% — ${daysLeft} days to survive. Emergency retrain or rollback needed immediately.`;
     } else if (m.recall <= m.slaAdherence) {
       diagnosis = `CRITICAL: ${labels.recall} collapsed to ${m.recall.toFixed(0)}%. Model is missing most positive cases. Rollback strongly advised.`;
-    } else if (m.featureStaleness > 40) {
+    } else if (m.featureStaleness > 30) {
       diagnosis = `CRITICAL: Feature staleness at ${m.featureStaleness.toFixed(0)}h — 6h from loss threshold. Enable Feature Store now.`;
     } else {
       diagnosis = `CRITICAL: SLA adherence at ${m.slaAdherence.toFixed(0)}%. Infrastructure is near collapse — scale or roll back immediately.`;
@@ -1208,7 +1209,7 @@ export function generatePostMortem(state: GameState): string[] {
     bullets.push(`${labels.precision} hit zero — the model was making meaningless predictions. Emergency retraining or rollback was needed.`);
   }
   if (state.metrics.recall <= 0) {
-    bullets.push(`${labels.recall} hit zero — the model stopped detecting positive cases entirely.`);
+    bullets.push(`${labels.recall} hit zero — every output the model was designed to find was missed. Complete detection failure across the board.`);
   }
   if (state.metrics.slaAdherence <= 0) {
     bullets.push("SLA adherence hit zero — a complete production outage. Infrastructure scaling or rollback was critical.");
