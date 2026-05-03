@@ -104,7 +104,7 @@ function advanceDay(s: GameState): GameState {
       s.metrics.precision = Math.min(85, s.metrics.precision + 2);
     }
     if (s.metrics.recall < 85) {
-      s.metrics.recall = Math.min(85, s.metrics.recall + 1);
+      s.metrics.recall = Math.min(85, s.metrics.recall + 2);
     }
     // Retraining runs consume compute — reflected in cost index
     s.metrics.inferenceCost = Math.min(100, s.metrics.inferenceCost + 2);
@@ -845,7 +845,7 @@ export function getEventForDay(state: GameState): GameEvent | null {
               triggerDay: s.day + 2,
               metric: "slaAdherence",
               delta: -10,
-              message: "Stakeholders escalated coverage failures — SLA breach incoming",
+              message: "Stakeholders escalated recall failures — SLA breach incoming",
             });
           },
         },
@@ -1172,7 +1172,7 @@ export function getEventForDay(state: GameState): GameEvent | null {
                 // "Fraud Recall" was Stripe-specific language in a universal event. This message shows in
                 // the Event Log for ALL scenarios including Amazon (Candidate Recall), Netflix (Diversity
                 // Score), Google (MAP Index), Uber (Surge Coverage), Zillow (Coverage Index). Made neutral.
-                message: "Label noise caused the model to under-learn genuine positive patterns — recall eroded as mislabeled cases became systematic blind spots in the detection pipeline",
+                message: "Label noise caused the model to under-learn genuine positive patterns — recall eroded as mislabeled cases became systematic blind spots in the prediction pipeline",
               }
             );
           },
