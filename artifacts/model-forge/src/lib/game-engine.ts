@@ -701,7 +701,14 @@ export function getEventForDay(state: GameState): GameEvent | null {
           id: "A",
           label: "Train dedicated LLM-content classifier and integrate into pipeline",
           effect: (s) => {
+            // A dedicated LLM-content classifier filters spam across the FULL index, not just top positions.
+            // Every query that previously had spam displacing relevant results now sees those documents surface.
+            // NDCG (precision) jumps because top positions are de-spammed — position-weighted quality rises.
+            // MAP (recall) also rises: AP(q) improves for ALL affected queries, and MAP = (1/|Q|) × Σ AP(q).
+            // This is not just a top-K fix — it is precisely what MAP measures (coverage of relevant documents
+            // across all queries, not just the head of the ranked list).
             s.metrics.precision += 12;
+            s.metrics.recall += 6;
             s.metrics.inferenceCost += 15;
             s.registry.models.push({
               id: `model_llm_detector_v${s.day}`,
@@ -732,7 +739,7 @@ export function getEventForDay(state: GameState): GameEvent | null {
           effect: (s) => {
             s.futureEffects.push(
               { triggerDay: s.day + 1, metric: "precision", delta: -8, message: "LLM content flood overwhelmed all quality signals" },
-              { triggerDay: s.day + 3, metric: "recall", delta: -8, message: "Spam recall collapsed — LLM content evades all existing filters" }
+              { triggerDay: s.day + 3, metric: "recall", delta: -8, message: "LLM content displaced relevant documents across the index — MAP collapsed as genuine content was buried in every affected result set" }
             );
           },
         },
@@ -788,7 +795,7 @@ export function getEventForDay(state: GameState): GameEvent | null {
     return {
       id: "low_recall",
       eventType: "triggered",
-      title: "CRITICAL: DETECTION RATE COLLAPSED",
+      title: "CRITICAL: COVERAGE COLLAPSED",
       description:
         "Your model's coverage has dropped below 60%. The model is failing to handle most of the cases it was designed for — whether missing positive class predictions in classification or refusing to predict on uncertain inputs in regression. Every uncovered case is a failure at scale.",
       choices: [
@@ -1136,7 +1143,7 @@ export function getEventForDay(state: GameState): GameEvent | null {
       eventType: "random",
       title: "PREDICTION DISTRIBUTION SHIFT",
       description:
-        "Real-time monitoring shows the model's output distribution has shifted significantly week-over-week with no corresponding change in actual ground-truth rates. In classification this appears as a spike in positive prediction rate; in regression as systematic over- or under-prediction; in ranking as systematic shifts in which content types or items dominate recommendation slots. Output predictions have drifted independently of input features.",
+        "Real-time monitoring shows the model's output distribution has shifted significantly week-over-week with no corresponding change in actual ground-truth rates. In classification this appears as a spike in positive prediction rate; in regression as systematic over- or under-prediction; in ranking as systematic shifts in which content types or items dominate search result positions or recommendation slots. Output predictions have drifted independently of input features.",
       choices: [
         {
           id: "A",
