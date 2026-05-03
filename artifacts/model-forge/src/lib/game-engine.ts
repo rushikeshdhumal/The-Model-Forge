@@ -110,7 +110,7 @@ export function getEventForDay(state: GameState): GameEvent | null {
           label: "Apply L2 regularization and retrain on recent market data",
           effect: (s) => {
             s.metrics.precision -= 8;
-            s.metrics.recall += 15;
+            s.metrics.recall += 5;
             s.metrics.skew = "Low";
             s.registry.models.push({
               id: "model_v2",
@@ -226,6 +226,7 @@ export function getEventForDay(state: GameState): GameEvent | null {
           id: "B",
           label: "Add adversarial input filter and content validation layer",
           effect: (s) => {
+            s.metrics.precision += 8;
             s.featureStore.enabled = true;
             s.metrics.featureStaleness = 1;
             s.metrics.skew = "Low";
@@ -281,9 +282,9 @@ export function getEventForDay(state: GameState): GameEvent | null {
             s.metrics.recall -= 12;
             s.futureEffects.push({
               triggerDay: s.day + 3,
-              metric: "skewLevel",
-              delta: 1,
-              message: "Blunt threshold increase failed — sophisticated fraud rings adapted",
+              metric: "precision",
+              delta: -8,
+              message: "Fraud rings adapted to the raised threshold — precision eroded as false negatives accumulated",
             });
           },
         },
@@ -305,7 +306,7 @@ export function getEventForDay(state: GameState): GameEvent | null {
           label: "Remove proxy demographic features from the training data",
           effect: (s) => {
             s.metrics.precision -= 8;
-            s.metrics.recall += 5;
+            s.metrics.recall -= 3;
             s.metrics.skew = "Low";
           },
         },
@@ -850,6 +851,7 @@ export type ScenarioBrief = {
   startingHandicap?: string;
   problemType: "classification" | "regression" | "ranking" | "generative";
   metricLabels: { precision: string; recall: string };
+  briefLabels: { precision: string; recall: string };
 };
 
 export const SCENARIO_BRIEFS: Record<string, ScenarioBrief> = {
@@ -865,6 +867,7 @@ export const SCENARIO_BRIEFS: Record<string, ScenarioBrief> = {
     lesson: "Even well-tuned models degrade. The systems around a model matter as much as the model itself.",
     problemType: "classification",
     metricLabels: { precision: "Precision", recall: "Recall" },
+    briefLabels: { precision: "PREC", recall: "REC" },
   },
   zillow: {
     id: "zillow",
@@ -881,6 +884,7 @@ export const SCENARIO_BRIEFS: Record<string, ScenarioBrief> = {
     startingHandicap: "Coverage index starts at 75% — you inherit a model already showing signs of distribution mismatch on recent market data.",
     problemType: "regression",
     metricLabels: { precision: "Accuracy Index", recall: "Coverage Index" },
+    briefLabels: { precision: "ACC", recall: "COV" },
   },
   tay: {
     id: "tay",
@@ -897,6 +901,7 @@ export const SCENARIO_BRIEFS: Record<string, ScenarioBrief> = {
     startingHandicap: "Output distribution skew starts at Medium — adversarial inputs are already influencing your model's pattern space.",
     problemType: "generative",
     metricLabels: { precision: "Coherence", recall: "Safety Score" },
+    briefLabels: { precision: "COH", recall: "SAFE" },
   },
   amazon: {
     id: "amazon",
@@ -913,6 +918,7 @@ export const SCENARIO_BRIEFS: Record<string, ScenarioBrief> = {
     startingHandicap: "Output distribution skew starts at Medium — feature distributions already diverge across demographic groups in the training data.",
     problemType: "classification",
     metricLabels: { precision: "Precision", recall: "Recall" },
+    briefLabels: { precision: "PREC", recall: "REC" },
   },
   uber: {
     id: "uber",
@@ -927,8 +933,9 @@ export const SCENARIO_BRIEFS: Record<string, ScenarioBrief> = {
     lesson:
       "Real-time ML systems need latency budgets, not just accuracy targets. Load testing, pre-warmed fallback models, and autoscaling are engineering requirements — not nice-to-haves.",
     startingHandicap: "SLA Adherence starts at 92% — the system is already under mild background load pressure from city traffic patterns.",
-    problemType: "classification",
-    metricLabels: { precision: "Precision", recall: "Recall" },
+    problemType: "regression",
+    metricLabels: { precision: "Demand Index", recall: "Surge Coverage" },
+    briefLabels: { precision: "DMND", recall: "SRGE" },
   },
   netflix: {
     id: "netflix",
@@ -945,6 +952,7 @@ export const SCENARIO_BRIEFS: Record<string, ScenarioBrief> = {
     startingHandicap: "Ranking quality (NDCG index) starts at 78% — the model is already slightly behind the current user behavior distribution.",
     problemType: "ranking",
     metricLabels: { precision: "NDCG Index", recall: "MAP Index" },
+    briefLabels: { precision: "NDCG", recall: "MAP" },
   },
   tesla: {
     id: "tesla",
@@ -958,9 +966,10 @@ export const SCENARIO_BRIEFS: Record<string, ScenarioBrief> = {
       "On Day 3, rare-class recall failures surface in production. The fix requires targeted training on synthetic edge-case data or a rule-based ensemble — not just retraining on more of the same distribution.",
     lesson:
       "Safety-critical computer vision systems cannot optimize only for average-case accuracy. Tail risk and rare events require specific evaluation sets, dedicated training data, and targeted coverage constraints.",
-    startingHandicap: "Rare-class coverage index starts at 72% — the model is already underperforming on minority-class predictions in production.",
-    problemType: "regression",
-    metricLabels: { precision: "Accuracy Index", recall: "Coverage Index" },
+    startingHandicap: "Rare-class detection recall starts at 72% — the model is already missing a significant portion of rare road-event classes in production.",
+    problemType: "classification",
+    metricLabels: { precision: "Detection Precision", recall: "Detection Recall" },
+    briefLabels: { precision: "DET-P", recall: "DET-R" },
   },
   twitter: {
     id: "twitter",
@@ -976,7 +985,8 @@ export const SCENARIO_BRIEFS: Record<string, ScenarioBrief> = {
       "Engagement metrics are a proxy for attention — not fairness or wellbeing. Any ranking model optimizing engagement at scale requires demographic fairness evaluation as part of standard model review.",
     startingHandicap: "Feed distribution skew starts at Medium — amplification patterns already diverge across user segments in the current ranking model.",
     problemType: "ranking",
-    metricLabels: { precision: "NDCG Index", recall: "MAP Index" },
+    metricLabels: { precision: "Engagement Score", recall: "Reach Index" },
+    briefLabels: { precision: "ENGS", recall: "REAC" },
   },
   facebook: {
     id: "facebook",
@@ -991,8 +1001,9 @@ export const SCENARIO_BRIEFS: Record<string, ScenarioBrief> = {
     lesson:
       "Every ML system needs a simpler, cheaper fallback that has been battle-tested in production. Circuit breakers and graceful degradation are as important as the main model.",
     startingHandicap: "SLA Adherence starts at 90% — the infrastructure is already under mild stress from background load on the serving cluster.",
-    problemType: "classification",
-    metricLabels: { precision: "Precision", recall: "Recall" },
+    problemType: "ranking",
+    metricLabels: { precision: "Relevance Score", recall: "Feed Recall" },
+    briefLabels: { precision: "RLVN", recall: "FEED" },
   },
   google: {
     id: "google",
@@ -1009,6 +1020,7 @@ export const SCENARIO_BRIEFS: Record<string, ScenarioBrief> = {
     startingHandicap: "Ranking quality (NDCG index) starts at 78% — your model is already slightly stale relative to the current web content distribution.",
     problemType: "ranking",
     metricLabels: { precision: "NDCG Index", recall: "MAP Index" },
+    briefLabels: { precision: "NDCG", recall: "MAP" },
   },
   stripe: {
     id: "stripe",
@@ -1025,6 +1037,7 @@ export const SCENARIO_BRIEFS: Record<string, ScenarioBrief> = {
     startingHandicap: "Prediction distribution skew starts at Medium — adversarial transactions have already influenced your trust-score feature distribution.",
     problemType: "classification",
     metricLabels: { precision: "Precision", recall: "Recall" },
+    briefLabels: { precision: "PREC", recall: "REC" },
   },
 };
 
@@ -1080,15 +1093,18 @@ export function generateDailyBrief(state: GameState): DailyBriefData | null {
   const prev = state.history[state.history.length - 1] as GameState;
 
   const labels = getMetricLabels(state.scenario);
+  const brief = SCENARIO_BRIEFS[state.scenario];
+  const briefP = brief?.briefLabels?.precision ?? labels.precision.slice(0, 4).toUpperCase();
+  const briefR = brief?.briefLabels?.recall ?? labels.recall.slice(0, 4).toUpperCase();
 
   const deltas: DailyBriefData["deltas"] = [
     {
-      name: labels.precision.toUpperCase().slice(0, 7),
+      name: briefP,
       delta: state.metrics.precision - prev.metrics.precision,
       current: state.metrics.precision,
     },
     {
-      name: labels.recall.toUpperCase().slice(0, 7),
+      name: briefR,
       delta: state.metrics.recall - prev.metrics.recall,
       current: state.metrics.recall,
     },
