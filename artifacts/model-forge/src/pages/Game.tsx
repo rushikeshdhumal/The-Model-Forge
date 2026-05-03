@@ -1049,6 +1049,7 @@ export default function Game() {
   const [authPassword, setAuthPassword] = useState("");
   const [authConfirm, setAuthConfirm] = useState("");
   const [authError, setAuthError] = useState("");
+  const [pendingCarryOver, setPendingCarryOver] = useState<{ sessionId: string; username: string; isRegister: boolean } | null>(null);
   const [showLeaderboard, setShowLeaderboard] = useState(false);
   const [showScenarioPicker, setShowScenarioPicker] = useState(false);
   const [showLanding, setShowLanding] = useState(() => {
@@ -1129,7 +1130,13 @@ export default function Game() {
     return null;
   };
 
-  const handleAuthSuccess = (result: { sessionId: string; username: string }) => {
+  const handleAuthSuccess = (result: { sessionId: string; username: string }, isRegister: boolean) => {
+    const hasProgress = !showLanding && gameState.day > 1 && gameState.status === "playing";
+    if (result.sessionId !== sessionId && hasProgress) {
+      setShowIdentity(false);
+      setPendingCarryOver({ sessionId: result.sessionId, username: result.username, isRegister });
+      return;
+    }
     localStorage.setItem("modelForge_playerName", result.username);
     localStorage.setItem("modelForge_sessionId", result.sessionId);
     setPlayerName(result.username);
@@ -1149,7 +1156,7 @@ export default function Game() {
     registerMutation.mutate(
       { data: { username: authUsername.trim().toLowerCase(), password: authPassword } },
       {
-        onSuccess: handleAuthSuccess,
+        onSuccess: (result) => handleAuthSuccess(result, true),
         onError: (e: unknown) => {
           const msg = (e as { response?: { data?: { error?: string } } })?.response?.data?.error;
           setAuthError(msg ?? "Registration failed. Please try again.");
@@ -1165,13 +1172,39 @@ export default function Game() {
     loginMutation.mutate(
       { data: { username: name, password: authPassword } },
       {
-        onSuccess: handleAuthSuccess,
+        onSuccess: (result) => handleAuthSuccess(result, false),
         onError: (e: unknown) => {
           const msg = (e as { response?: { data?: { error?: string } } })?.response?.data?.error;
           setAuthError(msg ?? "Login failed. Please try again.");
         },
       }
     );
+  };
+
+  const handleCarryOver = async () => {
+    if (!pendingCarryOver) return;
+    const { sessionId: newSessionId, username } = pendingCarryOver;
+    const carryState = { ...gameState, sessionId: newSessionId };
+    try {
+      await fetch("/api/save-state", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ sessionId: newSessionId, state: carryState }),
+      });
+    } catch (_e) { /* proceed regardless */ }
+    localStorage.setItem("modelForge_playerName", username);
+    localStorage.setItem("modelForge_sessionId", newSessionId);
+    localStorage.setItem("modelForge_skipLanding", "true");
+    window.location.reload();
+  };
+
+  const handleDiscardCarryOver = () => {
+    if (!pendingCarryOver) return;
+    const { sessionId: newSessionId, username } = pendingCarryOver;
+    localStorage.setItem("modelForge_playerName", username);
+    localStorage.setItem("modelForge_sessionId", newSessionId);
+    localStorage.setItem("modelForge_skipLanding", "true");
+    window.location.reload();
   };
 
   const { theme, toggleTheme } = useTheme();
@@ -2899,6 +2932,34 @@ export default function Game() {
               Passwords are hashed and never stored in plain text.
               Wrong password = no access to that account's save.
             </p>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Carry-over prompt — shown when signing in/registering mid-game */}
+      <Dialog open={pendingCarryOver !== null} onOpenChange={(open) => { if (!open) handleDiscardCarryOver(); }}>
+        <DialogContent className="bg-card border-primary/30 font-mono max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="text-primary tracking-widest text-sm">CARRY OVER YOUR RUN?</DialogTitle>
+            <DialogDescription className="text-muted-foreground text-xs leading-relaxed">
+              You are on <span className="text-primary font-bold">Day {gameState.day}</span> of a{" "}
+              <span className="text-primary font-bold capitalize">{gameState.scenario}</span> run.{" "}
+              {pendingCarryOver?.isRegister
+                ? "Carry it over to your new account, or start fresh?"
+                : "Carry it over to this account, or load your account's last saved progress?"}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex flex-col gap-2 pt-2">
+            <Button className="w-full font-bold tracking-widest" onClick={handleCarryOver}>
+              ▶ YES, CARRY OVER DAY {gameState.day} RUN
+            </Button>
+            <Button
+              variant="outline"
+              className="w-full border-border/40 text-muted-foreground hover:text-foreground text-xs tracking-widest"
+              onClick={handleDiscardCarryOver}
+            >
+              {pendingCarryOver?.isRegister ? "NO, START FRESH" : "NO, LOAD MY ACCOUNT"}
+            </Button>
           </div>
         </DialogContent>
       </Dialog>
