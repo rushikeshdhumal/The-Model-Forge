@@ -1362,6 +1362,7 @@ export default function Game() {
       setEventResolved(false);
       setHistoryView(null);
     }
+    setShowLanding(false);
     setShowTutorial(true);
   };
 
@@ -2434,7 +2435,7 @@ export default function Game() {
 
       {/* Leaderboard Modal */}
       <Dialog open={showLeaderboard} onOpenChange={setShowLeaderboard}>
-        <DialogContent className="bg-card border-primary/30 font-mono max-w-2xl w-full">
+        <DialogContent className="bg-card border-primary/30 font-mono w-[95vw] sm:max-w-2xl">
           <DialogHeader>
             <DialogTitle className="text-primary tracking-widest text-sm">GLOBAL LEADERBOARD</DialogTitle>
             <DialogDescription className="text-muted-foreground text-xs">
@@ -2560,7 +2561,7 @@ export default function Game() {
 
       {/* Scenario Picker Modal */}
       <Dialog open={showScenarioPicker} onOpenChange={setShowScenarioPicker}>
-        <DialogContent className="bg-card border-primary/30 font-mono max-w-5xl w-full max-h-[90vh] overflow-y-auto">
+        <DialogContent className="bg-card border-primary/30 font-mono w-[95vw] sm:max-w-5xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="text-primary tracking-widest text-sm">SELECT YOUR SCENARIO</DialogTitle>
             <DialogDescription className="text-muted-foreground text-xs leading-relaxed">
