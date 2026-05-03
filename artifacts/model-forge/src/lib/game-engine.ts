@@ -110,6 +110,21 @@ function advanceDay(s: GameState): GameState {
     s.metrics.inferenceCost = Math.min(100, s.metrics.inferenceCost + 2);
   }
 
+  // STRIPE: Adversarial probing — fraud rings continuously probe the decision boundary after Day 5.
+  // Choice A (velocity anomaly detection) or B (temporal consistency validation) on Day 2 counter this.
+  // Choice C (raise threshold) leaves the rings free to probe: they study the new bar and send
+  // carefully-crafted near-threshold transactions that erode precision by an additional −1/day.
+  // With CI/CD active: +2 precision − 1 passive − 1 probing = net 0 (CI/CD exactly neutralises both drains).
+  // Without CI/CD: −2/day net on precision (passive + probing), making recovery significantly harder.
+  if (s.scenario === "stripe" && s.day >= 6 && !s.scenarioFlags?.stripeAdaptationCountered) {
+    s.metrics.precision = Math.max(0, s.metrics.precision - 1);
+    s.eventLog.push({
+      day: s.day,
+      type: "adversarial_probing",
+      message: "Fraud rings probing model boundary — near-threshold transactions eroding Precision",
+    });
+  }
+
   // Clamp
   s.metrics.precision = Math.min(100, Math.max(0, s.metrics.precision));
   s.metrics.recall = Math.min(100, Math.max(0, s.metrics.recall));
@@ -393,6 +408,10 @@ export function getEventForDay(state: GameState): GameEvent | null {
             s.metrics.skew = "Low";
             s.metrics.precision += 5;
             s.metrics.recall += 3;
+            // Velocity anomaly detection continuously monitors transaction sequences — the rings can no longer
+            // build trust scores silently, so ongoing probing attempts are detected and filtered from Day 6 onward.
+            if (!s.scenarioFlags) s.scenarioFlags = {};
+            s.scenarioFlags.stripeAdaptationCountered = true;
           },
         },
         {
@@ -407,6 +426,10 @@ export function getEventForDay(state: GameState): GameEvent | null {
             s.metrics.recall += 4;
             s.metrics.skew = "Low";
             s.metrics.inferenceCost += 3;
+            // Temporal validation in the training pipeline flags the trust-building pattern, cutting off the
+            // rings' ability to inflate trust scores — ongoing boundary probing is suppressed from Day 6 onward.
+            if (!s.scenarioFlags) s.scenarioFlags = {};
+            s.scenarioFlags.stripeAdaptationCountered = true;
           },
         },
         {
@@ -1594,7 +1617,7 @@ export const SCENARIO_BRIEFS: Record<string, ScenarioBrief> = {
     whatHappened:
       "Stripe's fraud detection classifier faced a coordinated adversarial attack: fraud rings deliberately made hundreds of small legitimate transactions to build up trust scores, then executed large fraudulent charges. The model's training data was retroactively found to encode this pattern — the classifier had learned from a poisoned distribution where high trust scores correlated with eventual fraud.",
     keyRisk:
-      "On Day 2, your fraud detection pipeline will surface trust-score manipulation patterns. Unlike Tay's online poisoning, this is batch-training data corruption. Velocity anomaly detection and temporal consistency validation are the correct mitigations.",
+      "On Day 2, your fraud detection pipeline will surface trust-score manipulation patterns. Unlike Tay's online poisoning, this is batch-training data corruption. Velocity anomaly detection (Choice A) and temporal consistency validation (Choice B) are the correct mitigations — both permanently suppress ongoing adversarial boundary probing. Choice C raises the threshold for an immediate precision gain, but fraud rings study the new bar: a precision cliff lands on Day 5, and active probing begins Day 6, draining Precision an additional −1/day for the rest of the run.",
     lesson:
       "Fraud models are adversarial by nature. Treating training data as trusted is naive. Continuous anomaly detection on the training pipeline is as important as anomaly detection on predictions.",
     startingHandicap: "Prediction distribution skew starts at Medium — adversarial transactions have already influenced your trust-score feature distribution.",

@@ -738,17 +738,18 @@ const CODEX_SCENARIO_DIFFICULTY = [
     difficulty: 3,
     problemType: "classification" as const,
     comingSoon: false,
-    tierRationale: "The signature event fires on Day 2 — earlier than any other active scenario's signature event — with skew already at Medium. Fraud rings respond adaptively to your choice: raising the detection threshold (Choice C) gives the highest immediate precision gain, but the rings retune their transactions to the new bar, scheduling a precision cliff on Day 5. The adversarial feedback loop makes wrong-choice recovery harder than in any other scenario.",
+    tierRationale: "The signature event fires on Day 2 — earlier than any other active scenario's signature event — with skew already at Medium. Fraud rings respond adaptively to your choice: Choice C (raise threshold) gives the highest immediate precision gain, but the rings study the new bar and begin probing it. This triggers two compounding consequences — a one-time precision cliff on Day 5 AND a persistent −1 Precision/day adversarial drain from Day 6 onward. Choices A and B deploy detection systems that suppress the ongoing probing entirely.",
     startingDebt: [
       "Training-serving skew starts at Medium — adversarial transactions have already corrupted the trust-score feature distribution before Day 1.",
       "Medium skew means one bad event choice away from High skew and its compounding −1/day extra decay on both metrics.",
+      "If the Day 2 event is mishandled, fraud rings begin active boundary probing from Day 6: an additional −1 Precision/day that stacks with passive decay.",
     ],
     signatureEvent: {
       day: 2,
       name: "COORDINATED TRUST-SCORE MANIPULATION",
-      insight: "Fraud rings built trust scores with small legitimate transactions before executing large fraudulent charges. Choice A (velocity anomaly detection) clears skew and improves both metrics. Choice B (temporal consistency validation) gives the best balanced outcome: precision+8, recall+4, skew cleared. Choice C (raise threshold) gives precision+10 but recall-12 and schedules precision-8 on Day 5 as fraud rings adapt.",
+      insight: "Fraud rings built trust scores with small legitimate transactions before executing large fraudulent charges. Choice A (velocity anomaly detection) clears skew, boosts both metrics, and permanently suppresses adversarial probing. Choice B (temporal consistency validation) gives the best balanced outcome — precision+8, recall+4, skew cleared, probing suppressed — at a small cost increase. Choice C (raise threshold) gives precision+10 but recall−12, schedules precision−8 on Day 5, AND leaves probing unsuppressed: −1 extra Precision/day from Day 6. The PROBING ACTIVE badge appears in the header when this threat is live.",
     },
-    scoringTrap: "Choice C is the highest-precision immediate play but creates a delayed precision cliff exactly when passive decay is compounding. Players who take it often need to use the low_accuracy triggered event on Day 6 to recover — spending the emergency retrain budget early with 8 days still to run.",
+    scoringTrap: "Choice C is the highest-precision immediate play but activates two compounding traps: a precision cliff on Day 5 and persistent adversarial probing (−1 Precision/day) from Day 6 onward. Without CI/CD (which exactly neutralises both passive and probing drain), Precision collapses into the low_accuracy triggered event well before Day 14. Enabling CI/CD after taking Choice C stabilises Precision at net 0/day — buying time but leaving no room for any further cost events.",
   },
   {
     id: "amazon",
@@ -1673,6 +1674,17 @@ export default function Game() {
                     🔥{gameState.streak}
                   </Badge>
                 )}
+                {gameState.scenario === "stripe" &&
+                  gameState.day >= 6 &&
+                  !gameState.scenarioFlags?.stripeAdaptationCountered &&
+                  gameState.status === "playing" && (
+                  <Badge
+                    title="Fraud rings probing model boundary — Precision drains −1/day"
+                    className="bg-destructive/15 text-destructive border border-destructive/40 font-mono text-[10px] px-1.5 animate-pulse"
+                  >
+                    ⚠ PROBING
+                  </Badge>
+                )}
                 {playerName ? (
                   <button
                     onClick={() => { setAuthMode("login"); setAuthUsername(""); setAuthPassword(""); setAuthConfirm(""); setAuthError(""); setShowIdentity(true); }}
@@ -1770,6 +1782,17 @@ export default function Game() {
                   className="bg-orange-500/15 text-orange-400 border border-orange-500/35 font-mono text-xs gap-1"
                 >
                   🔥 {gameState.streak}d streak
+                </Badge>
+              )}
+              {gameState.scenario === "stripe" &&
+                gameState.day >= 6 &&
+                !gameState.scenarioFlags?.stripeAdaptationCountered &&
+                gameState.status === "playing" && (
+                <Badge
+                  title="Fraud rings are actively probing your model boundary — Precision drains −1/day. Deploy CI/CD to neutralise, or trigger Emergency Retrain."
+                  className="bg-destructive/15 text-destructive border border-destructive/40 font-mono text-xs animate-pulse"
+                >
+                  ⚠ PROBING ACTIVE
                 </Badge>
               )}
 

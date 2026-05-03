@@ -33,6 +33,7 @@ export interface GameState {
   maxStreak: number;
   score?: number;
   grade?: string;
+  scenarioFlags?: Partial<Record<string, boolean>>;
 }
 
 export interface ModelInfo {
