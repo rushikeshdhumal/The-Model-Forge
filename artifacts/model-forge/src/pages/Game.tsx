@@ -1324,7 +1324,7 @@ export default function Game() {
     setCurrentEvent(getEventForDay(newState));
     setEventResolved(false);
     setHistoryView(null);
-    setScenarioBrief(SCENARIO_BRIEFS[val] ?? null);
+    setScenarioBrief(val !== "default" ? (SCENARIO_BRIEFS[val] ?? null) : null);
   };
 
   const handleLevelChange = (val: string) => {
@@ -2326,7 +2326,7 @@ export default function Game() {
                 { label: `Max Streak (${gameState.maxStreak ?? 0} clean days)`, pts: Math.min((gameState.maxStreak ?? 0) / 14, 1) * 20, of: 20 },
                 { label: `Days Survived (${daysCompleted}/14)`, pts: Math.min(daysCompleted / 14, 1) * 20, of: 20 },
                 { label: "Win Bonus", pts: gameState.status === "won" ? 10 : 0, of: 10 },
-                { label: `Difficulty Bonus (${diffLabel})`, pts: diffBonus, of: 25 },
+                { label: `Difficulty Bonus (${diffLabel})`, pts: diffBonus, of: diffBonus },
               ];
               return (
                 <div className="border border-border/40 bg-secondary/10 p-3">
@@ -3193,7 +3193,8 @@ export default function Game() {
                       ["SLA Adherence", "−0.5% per day"],
                       ["Feature Staleness", "+2h per day (Feature Store OFF)"],
                       ["Feature Staleness", "Reset to 2h per day (Feature Store ON)"],
-                      [`${metricLabels.precision} (CI/CD ON)`, "+2% per day (offsets natural decay)"],
+                      [`${metricLabels.precision} (CI/CD ON)`, "+2% per day, capped at 85%"],
+                      [`${metricLabels.recall} (CI/CD ON)`, "+1% per day, capped at 85%"],
                     ].map(([label, value], i) => (
                       <div key={i} className="flex justify-between border-b border-border/20 pb-1">
                         <span className="text-muted-foreground">{label}</span>

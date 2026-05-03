@@ -819,10 +819,10 @@ export function getEventForDay(state: GameState): GameEvent | null {
       choices: [
         {
           id: "A",
-          label: "Emergency retrain to recover detection coverage",
+          label: "Emergency retrain to restore prediction coverage",
           effect: (s) => {
             // Full rebuild on latest data restores both metrics — same as the precision emergency retrain.
-            // Precision is NOT sacrificed here: that trade-off only happens when lowering the decision
+            // Precision is NOT sacrificed here: that trade-off only happens when lowering the confidence
             // threshold (Choice B), not when doing a full retrain on updated ground-truth labels.
             s.metrics.recall += 20;
             s.metrics.precision += 8;
@@ -831,7 +831,7 @@ export function getEventForDay(state: GameState): GameEvent | null {
         },
         {
           id: "B",
-          label: "Lower detection threshold — catch more positives at cost of precision",
+          label: "Lower confidence threshold — extend coverage at cost of accuracy",
           effect: (s) => {
             s.metrics.recall += 12;
             s.metrics.precision -= 10;
@@ -845,7 +845,7 @@ export function getEventForDay(state: GameState): GameEvent | null {
               triggerDay: s.day + 2,
               metric: "slaAdherence",
               delta: -10,
-              message: "Stakeholders escalated detection failures — SLA breach incoming",
+              message: "Stakeholders escalated coverage failures — SLA breach incoming",
             });
           },
         },
@@ -1715,7 +1715,7 @@ export function generateDailyBrief(state: GameState): DailyBriefData | null {
     } else if (m.precision <= 20 && m.precision <= m.recall) {
       diagnosis = `CRITICAL: ${labels.precision} at ${m.precision.toFixed(0)}% — ${daysLeft} days to survive. Emergency retrain or rollback needed immediately.`;
     } else if (m.recall <= 20) {
-      diagnosis = `CRITICAL: ${labels.recall} collapsed to ${m.recall.toFixed(0)}%. Model is missing most positive cases. Rollback strongly advised.`;
+      diagnosis = `CRITICAL: ${labels.recall} collapsed to ${m.recall.toFixed(0)}%. Model coverage has failed — outputs are no longer reliable. Rollback strongly advised.`;
     } else {
       diagnosis = `CRITICAL: SLA adherence at ${m.slaAdherence.toFixed(0)}%. Infrastructure is near collapse — scale or roll back immediately.`;
     }
