@@ -522,7 +522,7 @@ export function getEventForDay(state: GameState): GameEvent | null {
       choices: [
         {
           id: "A",
-          label: "Fall back to XGBoost (35ms P99, slightly lower accuracy)",
+          label: "Fall back to XGBoost (35ms P99, lower accuracy)",
           effect: (s) => {
             s.metrics.precision -= 8;
             s.metrics.recall -= 5;
@@ -1047,10 +1047,14 @@ export function getEventForDay(state: GameState): GameEvent | null {
       description: "Unexpected 3x spike in inference requests. Infrastructure is under stress.",
       choices: [
         { id: "A", label: "Auto-scale cluster", effect: (s) => { s.metrics.inferenceCost += 20; } },
-        // Rate limiting a 3x spike means rejecting ~2/3 of requests — a far bigger SLA hit than -10
+        // Rate limiting a 3x spike means rejecting ~2/3 of requests cleanly — high SLA impact, but served predictions remain full quality
         { id: "B", label: "Rate limit requests", effect: (s) => { s.metrics.slaAdherence -= 22; } },
-        // Uncontrolled failure is worse than rate limiting — but load-shedding affects throughput (SLA), not model recall
-        { id: "C", label: "Let it fail — shed load", effect: (s) => { s.metrics.slaAdherence -= 32; } },
+        // Uncontrolled failure drops ~2/3 of all prediction requests chaotically. These are not clean rejections —
+        // shed requests are direct coverage misses. Surge Coverage, Coverage Index, MAP, and Diversity Score all
+        // require predictions to actually be served. A shed request is an uncovered case in every recall metric.
+        // Distinct from rate limiting: rate limiting rejects cleanly before prediction; shedding fails mid-pipeline,
+        // creating partial failures that corrupt coverage counts.
+        { id: "C", label: "Let it fail — shed load", effect: (s) => { s.metrics.slaAdherence -= 32; s.metrics.recall -= 5; } },
       ],
     },
     {
@@ -1343,7 +1347,7 @@ export function getEventForDay(state: GameState): GameEvent | null {
               triggerDay: s.day + 3,
               metric: "recall",
               delta: -9,
-              message: "Feedback loop compounded — model increasingly confident in its own past false negatives",
+              message: "Feedback loop compounded — model increasingly entrenched in its own past predictions, amplifying systematic bias across the board",
             });
           },
         },
