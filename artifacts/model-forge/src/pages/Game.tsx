@@ -753,7 +753,7 @@ export default function Game() {
 
   const copyGameOverSummary = () => {
     const outcome = gameState.status === "won" ? "survived" : "failed";
-    const text = `I ${outcome} Day ${gameState.day}/14 on The Model Forge! Final: Precision ${gameState.metrics.precision.toFixed(0)}%, Recall ${gameState.metrics.recall.toFixed(0)}%, SLA ${gameState.metrics.slaAdherence.toFixed(0)}%. Play at ${window.location.origin}`;
+    const text = `I ${outcome} Day ${gameState.day}/14 on The Model Forge! Final: ${metricLabels.precision} ${gameState.metrics.precision.toFixed(0)}%, ${metricLabels.recall} ${gameState.metrics.recall.toFixed(0)}%, SLA ${gameState.metrics.slaAdherence.toFixed(0)}%. Play at ${window.location.origin}`;
     navigator.clipboard.writeText(text).catch(() => {});
     setGameOverCopied(true);
     setTimeout(() => setGameOverCopied(false), 2000);
@@ -1196,8 +1196,8 @@ export default function Game() {
                         fontFamily: "inherit",
                       }}
                     />
-                    <Line type="monotone" dataKey="Precision" stroke="hsl(var(--primary))" strokeWidth={1.5} dot={false} />
-                    <Line type="monotone" dataKey="Recall" stroke="#60a5fa" strokeWidth={1.5} dot={false} />
+                    <Line type="monotone" dataKey="Precision" name={metricLabels.precision} stroke="hsl(var(--primary))" strokeWidth={1.5} dot={false} />
+                    <Line type="monotone" dataKey="Recall" name={metricLabels.recall} stroke="#60a5fa" strokeWidth={1.5} dot={false} />
                     <Line type="monotone" dataKey="SLA" stroke="#f59e0b" strokeWidth={1} dot={false} strokeDasharray="3 3" />
                   </LineChart>
                 </ResponsiveContainer>
@@ -1554,13 +1554,13 @@ export default function Game() {
                     <RechartsTooltip
                       contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", fontSize: 10, fontFamily: "inherit" }}
                     />
-                    <Line type="monotone" dataKey="Precision" stroke="hsl(var(--primary))" strokeWidth={2} dot={false} />
-                    <Line type="monotone" dataKey="Recall" stroke="#60a5fa" strokeWidth={1.5} dot={false} />
+                    <Line type="monotone" dataKey="Precision" name={metricLabels.precision} stroke="hsl(var(--primary))" strokeWidth={2} dot={false} />
+                    <Line type="monotone" dataKey="Recall" name={metricLabels.recall} stroke="#60a5fa" strokeWidth={1.5} dot={false} />
                     <Line type="monotone" dataKey="SLA" stroke="#f59e0b" strokeWidth={1} dot={false} strokeDasharray="3 3" />
                   </LineChart>
                 </ResponsiveContainer>
                 <div className="flex gap-4 justify-center mt-1">
-                  {[["Precision", "hsl(var(--primary))"], ["Recall", "#60a5fa"], ["SLA", "#f59e0b"]].map(([k, c]) => (
+                  {[[metricLabels.precision, "hsl(var(--primary))"], [metricLabels.recall, "#60a5fa"], ["SLA", "#f59e0b"]].map(([k, c]) => (
                     <span key={k} className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
                       <span className="inline-block w-4 h-0.5" style={{ background: c }} />
                       {k}

@@ -601,12 +601,13 @@ export function getEventForDay(state: GameState): GameEvent | null {
     return {
       id: "low_accuracy",
       eventType: "triggered",
-      title: "CRITICAL: LOW PRECISION",
-      description: "Precision has dropped below 60%. Users are receiving low-quality predictions in production.",
+      title: "CRITICAL: MODEL QUALITY DEGRADED",
+      description:
+        "Your model's primary quality metric has dropped below 60%. Prediction quality is critically degraded in production — immediate action required.",
       choices: [
         {
           id: "A",
-          label: "Emergency retrain",
+          label: "Emergency retrain on latest data",
           effect: (s) => {
             s.metrics.precision += 20;
             s.metrics.inferenceCost += 5;
@@ -614,9 +615,9 @@ export function getEventForDay(state: GameState): GameEvent | null {
         },
         {
           id: "B",
-          label: "Rollback to previous model",
+          label: "Rollback to last stable checkpoint",
           effect: (s) => {
-            s.metrics.precision = 70;
+            s.metrics.precision = Math.max(s.metrics.precision + 15, 72);
             s.metrics.recall -= 10;
           },
         },
@@ -628,7 +629,7 @@ export function getEventForDay(state: GameState): GameEvent | null {
               triggerDay: s.day + 2,
               metric: "slaAdherence",
               delta: -10,
-              message: "Stakeholders escalated low accuracy SLA breach",
+              message: "Stakeholders escalated quality degradation — SLA breach incoming",
             });
           },
         },
@@ -681,7 +682,7 @@ export function getEventForDay(state: GameState): GameEvent | null {
       choices: [
         {
           id: "A",
-          label: "Rollback to last stable model",
+          label: "Execute emergency service recovery",
           effect: (s) => {
             s.metrics.slaAdherence += 15;
             s.metrics.precision -= 5;
@@ -728,7 +729,7 @@ export function getEventForDay(state: GameState): GameEvent | null {
       id: "rand_ab_test",
       eventType: "random",
       title: "A/B TEST RESULTS",
-      description: "Canary model showing 5% recall improvement on 10% of live traffic. Ready to promote?",
+      description: "Canary model showing 5% quality improvement on 10% of live traffic. Ready to promote?",
       choices: [
         {
           id: "A",
@@ -736,7 +737,10 @@ export function getEventForDay(state: GameState): GameEvent | null {
           effect: (s) => {
             s.metrics.recall += 5;
             const newId = `model_v${s.day}`;
-            s.registry.models.push({ id: newId, type: "XGBoost", version: `${s.day}.0`, stage: "production", trainedOnDay: s.day, dataVersion: "dataset_latest", accuracy: 87, cost: 0.1, latency: 15, explainability: "Medium" });
+            const canaryType = ["tesla", "netflix", "google", "tay", "facebook"].includes(s.scenario)
+              ? "Neural Network"
+              : "XGBoost";
+            s.registry.models.push({ id: newId, type: canaryType, version: `${s.day}.0`, stage: "production", trainedOnDay: s.day, dataVersion: "dataset_latest", accuracy: 87, cost: 0.1, latency: 15, explainability: "Medium" });
             s.registry.productionModelId = newId;
           },
         },
@@ -757,14 +761,17 @@ export function getEventForDay(state: GameState): GameEvent | null {
             s.metrics.precision += 8;
             s.metrics.inferenceCost += 5;
             const newId = `model_v${s.day}`;
-            s.registry.models.push({ id: newId, type: "XGBoost", version: `${s.day}.0`, stage: "staging", trainedOnDay: s.day, dataVersion: "dataset_2025Q2", accuracy: 88, cost: 0.1, latency: 15, explainability: "Medium" });
+            const retrainType = ["tesla", "netflix", "google", "tay", "facebook"].includes(s.scenario)
+              ? "Neural Network"
+              : "XGBoost";
+            s.registry.models.push({ id: newId, type: retrainType, version: `${s.day}.0`, stage: "staging", trainedOnDay: s.day, dataVersion: "dataset_2025Q2", accuracy: 88, cost: 0.1, latency: 15, explainability: "Medium" });
           },
         },
         {
           id: "B",
           label: "Schedule for next sprint",
           effect: (s) => {
-            s.futureEffects.push({ triggerDay: s.day + 3, metric: "precision", delta: 5, message: "Scheduled retrain improved Precision" });
+            s.futureEffects.push({ triggerDay: s.day + 3, metric: "precision", delta: 5, message: "Scheduled retrain on fresh data improved model quality" });
           },
         },
         { id: "C", label: "Skip — current model is good enough", effect: (_s) => {} },
@@ -813,11 +820,11 @@ export function getEventForDay(state: GameState): GameEvent | null {
     {
       id: "rand_null_features",
       eventType: "random",
-      title: "NULL FEATURE SPIKE",
-      description: "Monitor detected unusual spike in null feature values in the last inference batch.",
+      title: "DATA QUALITY ALERT",
+      description: "Monitor detected an unusual spike in missing or corrupted values in the last inference batch.",
       choices: [
-        { id: "A", label: "Investigate and fix upstream pipeline", effect: (s) => { s.metrics.featureStaleness = 3; } },
-        { id: "B", label: "Impute nulls with mean", effect: (s) => { s.metrics.precision -= 3; } },
+        { id: "A", label: "Investigate and fix upstream data pipeline", effect: (s) => { s.metrics.featureStaleness = 3; } },
+        { id: "B", label: "Apply data imputation strategy", effect: (s) => { s.metrics.precision -= 3; } },
         { id: "C", label: "Ignore — likely a blip", effect: (s) => { s.metrics.skew = s.metrics.skew === "Low" ? "Medium" : "High"; } },
       ],
     },
@@ -827,7 +834,7 @@ export function getEventForDay(state: GameState): GameEvent | null {
       title: "LEGAL EXPLAINABILITY REQUEST",
       description: "Legal team requires model explainability report for a pending audit within 48 hours.",
       choices: [
-        { id: "A", label: "Generate SHAP report", effect: (s) => { s.metrics.inferenceCost += 5; } },
+        { id: "A", label: "Generate model explainability report", effect: (s) => { s.metrics.inferenceCost += 5; } },
         { id: "B", label: "Use surrogate model for explanation", effect: (s) => { s.metrics.precision -= 3; } },
         { id: "C", label: "Deny request — no bandwidth", effect: (s) => { s.metrics.slaAdherence -= 3; } },
       ],
@@ -1206,7 +1213,7 @@ export function generatePostMortem(state: GameState): string[] {
   if (state.metrics.slaAdherence <= 0) {
     bullets.push("SLA adherence hit zero — a complete production outage. Infrastructure scaling or rollback was critical.");
   }
-  if (state.metrics.featureStaleness > 48) {
+  if (state.metrics.featureStaleness > 36) {
     bullets.push("Feature staleness exceeded 48 hours — the model was operating on data nearly 2 days out of date.");
   }
   if (state.metrics.inferenceCost >= 100) {
