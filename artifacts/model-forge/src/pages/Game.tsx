@@ -1053,6 +1053,9 @@ export default function Game() {
   const [authPassword, setAuthPassword] = useState("");
   const [authConfirm, setAuthConfirm] = useState("");
   const [authError, setAuthError] = useState("");
+  const [authFailCount, setAuthFailCount] = useState(0);
+  const [authLockedUntil, setAuthLockedUntil] = useState(0);
+  const [authLockSecondsLeft, setAuthLockSecondsLeft] = useState(0);
   const [pendingCarryOver, setPendingCarryOver] = useState<{ sessionId: string; username: string; isRegister: boolean } | null>(null);
   const [showLookup, setShowLookup] = useState(false);
   const [lookupInput, setLookupInput] = useState("");
@@ -1115,6 +1118,33 @@ export default function Game() {
   const registerMutation = useRegisterPlayer();
   const loginMutation = useLoginPlayer();
   const authPending = registerMutation.isPending || loginMutation.isPending;
+
+  const AUTH_MAX_FAILS = 5;
+  const AUTH_LOCKOUT_MS = 5 * 60 * 1000; // 5 minutes
+
+  useEffect(() => {
+    if (!authLockedUntil) return;
+    const tick = () => {
+      const remaining = Math.ceil((authLockedUntil - Date.now()) / 1000);
+      if (remaining <= 0) {
+        setAuthLockedUntil(0);
+        setAuthFailCount(0);
+        setAuthLockSecondsLeft(0);
+      } else {
+        setAuthLockSecondsLeft(remaining);
+      }
+    };
+    tick();
+    const id = setInterval(tick, 1000);
+    return () => clearInterval(id);
+  }, [authLockedUntil]);
+
+  const isAuthLocked = authLockSecondsLeft > 0;
+  const formatLockTime = (secs: number) => {
+    const m = Math.floor(secs / 60);
+    const s = secs % 60;
+    return `${m}:${String(s).padStart(2, "0")}`;
+  };
 
   const { data: lookupData, isFetching: lookupFetching, isError: lookupError } = useCheckUsername(
     { username: lookupQuery },
@@ -1204,33 +1234,47 @@ export default function Game() {
     }
   };
 
+  const recordAuthFailure = () => {
+    setAuthFailCount((c) => {
+      const next = c + 1;
+      if (next >= AUTH_MAX_FAILS) {
+        setAuthLockedUntil(Date.now() + AUTH_LOCKOUT_MS);
+      }
+      return next;
+    });
+  };
+
   const handleRegister = () => {
+    if (isAuthLocked) return;
     const err = validateAuthFields();
     if (err) { setAuthError(err); return; }
     setAuthError("");
     registerMutation.mutate(
       { data: { username: authUsername.trim().toLowerCase(), password: authPassword } },
       {
-        onSuccess: (result) => handleAuthSuccess(result, true),
+        onSuccess: (result) => { setAuthFailCount(0); handleAuthSuccess(result, true); },
         onError: (e: unknown) => {
           const msg = (e as { response?: { data?: { error?: string } } })?.response?.data?.error;
           setAuthError(msg ?? "Registration failed. Please try again.");
+          recordAuthFailure();
         },
       }
     );
   };
 
   const handleLogin = () => {
+    if (isAuthLocked) return;
     const name = authUsername.trim().toLowerCase();
     if (!name || !authPassword) { setAuthError("Please enter your username and password."); return; }
     setAuthError("");
     loginMutation.mutate(
       { data: { username: name, password: authPassword } },
       {
-        onSuccess: (result) => handleAuthSuccess(result, false),
+        onSuccess: (result) => { setAuthFailCount(0); handleAuthSuccess(result, false); },
         onError: (e: unknown) => {
           const msg = (e as { response?: { data?: { error?: string } } })?.response?.data?.error;
           setAuthError(msg ?? "Login failed. Please try again.");
+          recordAuthFailure();
         },
       }
     );
@@ -1676,11 +1720,26 @@ export default function Game() {
                     className="w-full bg-secondary/40 border border-border/40 px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground/50 outline-none focus:border-primary/50" />
                 </div>
               )}
-              {authError && <p role="alert" className="text-[10px] text-destructive border-l-2 border-destructive/40 pl-2">{authError}</p>}
+              {isAuthLocked ? (
+                <div className="bg-destructive/10 border border-destructive/30 px-3 py-2.5 space-y-1">
+                  <p className="text-[10px] text-destructive font-bold tracking-widest">⛔ FORM LOCKED</p>
+                  <p className="text-[10px] text-destructive/80 leading-relaxed">
+                    {AUTH_MAX_FAILS} failed attempts detected. Try again in{" "}
+                    <span className="font-bold tabular-nums">{formatLockTime(authLockSecondsLeft)}</span>.
+                  </p>
+                </div>
+              ) : (
+                authError && <p role="alert" className="text-[10px] text-destructive border-l-2 border-destructive/40 pl-2">{authError}</p>
+              )}
+              {!isAuthLocked && authFailCount > 0 && authFailCount < AUTH_MAX_FAILS && (
+                <p className="text-[9px] text-destructive/60 text-right tabular-nums">
+                  {authFailCount}/{AUTH_MAX_FAILS} failed attempts
+                </p>
+              )}
               <div className="flex gap-2 pt-1">
-                <Button className="flex-1 font-bold tracking-widest" disabled={authPending}
+                <Button className="flex-1 font-bold tracking-widest" disabled={authPending || isAuthLocked}
                   onClick={authMode === "register" ? handleRegister : handleLogin}>
-                  {authPending ? "CONNECTING…" : authMode === "register" ? "CREATE ACCOUNT" : "SIGN IN"}
+                  {authPending ? "CONNECTING…" : isAuthLocked ? `LOCKED — ${formatLockTime(authLockSecondsLeft)}` : authMode === "register" ? "CREATE ACCOUNT" : "SIGN IN"}
                 </Button>
                 <Button variant="outline" className="border-border/40 text-muted-foreground text-xs"
                   onClick={() => setShowIdentity(false)}>
@@ -3121,17 +3180,38 @@ export default function Game() {
               </div>
             )}
 
-            {authError && (
-              <p role="alert" className="text-[10px] text-destructive leading-relaxed border-l-2 border-destructive/40 pl-2">{authError}</p>
+            {isAuthLocked ? (
+              <div className="bg-destructive/10 border border-destructive/30 px-3 py-2.5 space-y-1">
+                <p className="text-[10px] text-destructive font-bold tracking-widest">⛔ FORM LOCKED</p>
+                <p className="text-[10px] text-destructive/80 leading-relaxed">
+                  {AUTH_MAX_FAILS} failed attempts detected. Try again in{" "}
+                  <span className="font-bold tabular-nums">{formatLockTime(authLockSecondsLeft)}</span>.
+                </p>
+              </div>
+            ) : (
+              authError && (
+                <p role="alert" className="text-[10px] text-destructive leading-relaxed border-l-2 border-destructive/40 pl-2">{authError}</p>
+              )
+            )}
+            {!isAuthLocked && authFailCount > 0 && authFailCount < AUTH_MAX_FAILS && (
+              <p className="text-[9px] text-destructive/60 text-right tabular-nums">
+                {authFailCount}/{AUTH_MAX_FAILS} failed attempts
+              </p>
             )}
 
             <div className="flex gap-2 pt-1">
               <Button
                 className="flex-1 font-bold tracking-widest"
-                disabled={authPending}
+                disabled={authPending || isAuthLocked}
                 onClick={authMode === "register" ? handleRegister : handleLogin}
               >
-                {authPending ? "CONNECTING…" : authMode === "register" ? "CREATE ACCOUNT" : "SIGN IN"}
+                {authPending
+                  ? "CONNECTING…"
+                  : isAuthLocked
+                  ? `LOCKED — ${formatLockTime(authLockSecondsLeft)}`
+                  : authMode === "register"
+                  ? "CREATE ACCOUNT"
+                  : "SIGN IN"}
               </Button>
               <Button
                 variant="outline"
