@@ -1,4 +1,4 @@
-import { pgTable, text, jsonb, timestamp, integer } from "drizzle-orm/pg-core";
+import { pgTable, text, jsonb, timestamp, integer, index } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 
@@ -8,7 +8,10 @@ export const playersTable = pgTable("players", {
   sessionId: text("session_id").notNull(),
   recoveryHash: text("recovery_hash"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
-});
+}, (t) => [
+  // Used by leaderboard LEFT JOIN and check-username JOIN
+  index("idx_players_session_id").on(t.sessionId),
+]);
 
 export const sessionsTable = pgTable("sessions", {
   sessionId: text("session_id").primaryKey(),
@@ -19,7 +22,10 @@ export const sessionsTable = pgTable("sessions", {
   wins: integer("wins").notNull().default(0),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
   createdAt: timestamp("created_at").notNull().defaultNow(),
-});
+}, (t) => [
+  // Used by leaderboard WHERE status = 'won' + ORDER BY day, wins
+  index("idx_sessions_status_day_wins").on(t.status, t.day, t.wins),
+]);
 
 export const insertSessionSchema = createInsertSchema(sessionsTable).omit({
   createdAt: true,

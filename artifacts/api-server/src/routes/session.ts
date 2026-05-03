@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import { randomUUID, randomBytes } from "crypto";
-import { eq, desc } from "drizzle-orm";
+import { eq, desc, sql } from "drizzle-orm";
 import { db, sessionsTable, playersTable } from "@workspace/db";
 import bcrypt from "bcryptjs";
 import rateLimit from "express-rate-limit";
@@ -32,7 +32,7 @@ const authLimiter = rateLimit({
   max: 10,
   standardHeaders: true,
   legacyHeaders: false,
-  skipSuccessfulRequests: true, // only count failed attempts (login / register / reset)
+  skipSuccessfulRequests: true,
   handler: (_req, res) => {
     res.status(429).json({
       error: "Too many attempts. Please wait 15 minutes and try again.",
@@ -163,8 +163,7 @@ function generateRecoveryCode(): string {
   for (let seg = 0; seg < 3; seg++) {
     code += "-";
     for (let i = 0; i < 4; i++) {
-      // Use modulo-rejection sampling alternative: buf byte is 0-255, chars.length=32
-      // 256 is divisible by 32, so no bias
+      // 256 is divisible by 32 (chars.length), so no modulo bias
       code += chars[buf[seg * 4 + i]! % chars.length];
     }
   }
@@ -185,7 +184,7 @@ router.get("/load-state", readLimiter, async (req, res) => {
 
   try {
     const rows = await db
-      .select()
+      .select({ state: sessionsTable.state })
       .from(sessionsTable)
       .where(eq(sessionsTable.sessionId, session_id))
       .limit(1);
@@ -246,15 +245,19 @@ router.post("/generate-recovery", recoveryGenLimiter, async (req, res) => {
   const { password } = body;
 
   try {
-    const rows = await db.select().from(playersTable).where(eq(playersTable.username, username)).limit(1);
+    // Select only the columns needed for verification
+    const rows = await db
+      .select({ passwordHash: playersTable.passwordHash })
+      .from(playersTable)
+      .where(eq(playersTable.username, username))
+      .limit(1);
+
     if (rows.length === 0) {
-      // Equalise timing: still run bcrypt so response time doesn't reveal account existence
       await bcrypt.compare(password, DUMMY_HASH);
       res.status(401).json({ error: "Invalid username or password.", code: "INVALID_CREDENTIALS" });
       return;
     }
-    const player = rows[0];
-    const passwordMatch = await bcrypt.compare(password, player.passwordHash);
+    const passwordMatch = await bcrypt.compare(password, rows[0].passwordHash);
     if (!passwordMatch) {
       res.status(401).json({ error: "Invalid username or password.", code: "INVALID_CREDENTIALS" });
       return;
@@ -278,7 +281,12 @@ router.post("/reset-password", authLimiter, async (req, res) => {
   const { recoveryCode, newPassword } = body;
 
   try {
-    const rows = await db.select().from(playersTable).where(eq(playersTable.username, username)).limit(1);
+    // Select only the recovery hash needed for verification
+    const rows = await db
+      .select({ recoveryHash: playersTable.recoveryHash })
+      .from(playersTable)
+      .where(eq(playersTable.username, username))
+      .limit(1);
 
     // Always run bcrypt.compare to equalise response time regardless of whether the
     // account or recovery hash exists — prevents timing-based enumeration
@@ -291,7 +299,6 @@ router.post("/reset-password", authLimiter, async (req, res) => {
     }
 
     const newPasswordHash = await bcrypt.hash(newPassword, BCRYPT_ROUNDS);
-    // Clear the recovery hash so the code can only be used once
     await db.update(playersTable)
       .set({ passwordHash: newPasswordHash, recoveryHash: null })
       .where(eq(playersTable.username, username));
@@ -314,11 +321,17 @@ router.get("/check-username", lookupLimiter, async (req, res) => {
     return;
   }
   try {
+    // Single JOIN instead of two sequential round-trips
     const rows = await db
       .select({
-        sessionId: playersTable.sessionId,
+        exists: sql<boolean>`true`,
+        day: sessionsTable.day,
+        scenario: sessionsTable.scenario,
+        wins: sessionsTable.wins,
+        status: sessionsTable.status,
       })
       .from(playersTable)
+      .leftJoin(sessionsTable, eq(playersTable.sessionId, sessionsTable.sessionId))
       .where(eq(playersTable.username, username))
       .limit(1);
 
@@ -328,24 +341,13 @@ router.get("/check-username", lookupLimiter, async (req, res) => {
       return;
     }
 
-    const sessionRows = await db
-      .select({
-        day: sessionsTable.day,
-        scenario: sessionsTable.scenario,
-        wins: sessionsTable.wins,
-        status: sessionsTable.status,
-      })
-      .from(sessionsTable)
-      .where(eq(sessionsTable.sessionId, rows[0].sessionId))
-      .limit(1);
-
-    const s = sessionRows[0] ?? null;
+    const s = rows[0];
     const data = CheckUsernameResponse.parse({
       exists: true,
-      day: s?.day ?? null,
-      scenario: s?.scenario ?? null,
-      wins: s?.wins ?? null,
-      status: s?.status ?? null,
+      day: s.day ?? null,
+      scenario: s.scenario ?? null,
+      wins: s.wins ?? null,
+      status: s.status ?? null,
     });
     res.json(data);
   } catch (err) {
@@ -370,9 +372,9 @@ router.post("/register", authLimiter, async (req, res) => {
   }
 
   try {
-    // Check if username is already taken
+    // Check existence — select only the PK column to minimise data transfer
     const existing = await db
-      .select()
+      .select({ username: playersTable.username })
       .from(playersTable)
       .where(eq(playersTable.username, username))
       .limit(1);
@@ -385,10 +387,7 @@ router.post("/register", authLimiter, async (req, res) => {
     const passwordHash = await bcrypt.hash(password, BCRYPT_ROUNDS);
     const sessionId = randomUUID();
 
-    // Create the player account
     await db.insert(playersTable).values({ username, passwordHash, sessionId });
-
-    // Pre-create the session row with default state
     await db.insert(sessionsTable).values({
       sessionId,
       state: { ...DEFAULT_STATE, sessionId },
@@ -412,8 +411,13 @@ router.post("/login", authLimiter, async (req, res) => {
   const { password } = body;
 
   try {
+    // Select only the columns needed — omit recoveryHash, createdAt
     const rows = await db
-      .select()
+      .select({
+        passwordHash: playersTable.passwordHash,
+        sessionId: playersTable.sessionId,
+        username: playersTable.username,
+      })
       .from(playersTable)
       .where(eq(playersTable.username, username))
       .limit(1);
@@ -438,14 +442,21 @@ router.post("/login", authLimiter, async (req, res) => {
 
 router.get("/leaderboard", readLimiter, async (req, res) => {
   try {
+    // Extract only the needed JSONB fields in SQL — avoids transferring the full
+    // game-state blob (potentially 10–50 KB per row) for every leaderboard entry
     const rows = await db
       .select({
         scenario: sessionsTable.scenario,
         day: sessionsTable.day,
         wins: sessionsTable.wins,
-        state: sessionsTable.state,
         updatedAt: sessionsTable.updatedAt,
         username: playersTable.username,
+        score: sql<number>`coalesce((${sessionsTable.state}->>'score')::int, 0)`,
+        grade: sql<string>`coalesce(${sessionsTable.state}->>'grade', 'D')`,
+        maxStreak: sql<number>`coalesce((${sessionsTable.state}->>'maxStreak')::int, 0)`,
+        metricPrecision: sql<number>`coalesce((${sessionsTable.state}->'metrics'->>'precision')::float, 0)`,
+        metricRecall: sql<number>`coalesce((${sessionsTable.state}->'metrics'->>'recall')::float, 0)`,
+        metricSla: sql<number>`coalesce((${sessionsTable.state}->'metrics'->>'slaAdherence')::float, 0)`,
       })
       .from(sessionsTable)
       .leftJoin(playersTable, eq(sessionsTable.sessionId, playersTable.sessionId))
@@ -453,29 +464,20 @@ router.get("/leaderboard", readLimiter, async (req, res) => {
       .orderBy(desc(sessionsTable.day), desc(sessionsTable.wins))
       .limit(50);
 
-    const mapped = rows.map((row) => {
-      const state = row.state as {
-        metrics?: { precision?: number; recall?: number; slaAdherence?: number };
-        score?: number;
-        grade?: string;
-        maxStreak?: number;
-      };
-      return {
+    const entries = rows
+      .map((row) => ({
         username: row.username ?? null,
         scenario: row.scenario,
         day: row.day,
         wins: row.wins,
-        precision: state?.metrics?.precision ?? 0,
-        recall: state?.metrics?.recall ?? 0,
-        slaAdherence: state?.metrics?.slaAdherence ?? 0,
+        precision: row.metricPrecision,
+        recall: row.metricRecall,
+        slaAdherence: row.metricSla,
         completedAt: row.updatedAt.toISOString(),
-        score: state?.score ?? 0,
-        grade: state?.grade ?? "D",
-        maxStreak: state?.maxStreak ?? 0,
-      };
-    });
-
-    const entries = mapped
+        score: row.score,
+        grade: row.grade,
+        maxStreak: row.maxStreak,
+      }))
       .sort((a, b) => b.score - a.score || b.precision - a.precision)
       .slice(0, 10);
 
