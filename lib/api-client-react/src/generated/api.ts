@@ -20,6 +20,8 @@ import type {
   AuthBody,
   AuthError,
   AuthResponse,
+  CheckUsernameParams,
+  CheckUsernameResponse,
   HealthStatus,
   LeaderboardResponse,
   LoadStateParams,
@@ -540,6 +542,100 @@ export const useLoginPlayer = <
 > => {
   return useMutation(getLoginPlayerMutationOptions(options));
 };
+
+/**
+ * @summary Check whether a username is registered
+ */
+export const getCheckUsernameUrl = (params: CheckUsernameParams) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/check-username?${stringifiedParams}`
+    : `/api/check-username`;
+};
+
+export const checkUsername = async (
+  params: CheckUsernameParams,
+  options?: RequestInit,
+): Promise<CheckUsernameResponse> => {
+  return customFetch<CheckUsernameResponse>(getCheckUsernameUrl(params), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getCheckUsernameQueryKey = (params?: CheckUsernameParams) => {
+  return [`/api/check-username`, ...(params ? [params] : [])] as const;
+};
+
+export const getCheckUsernameQueryOptions = <
+  TData = Awaited<ReturnType<typeof checkUsername>>,
+  TError = ErrorType<unknown>,
+>(
+  params: CheckUsernameParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof checkUsername>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getCheckUsernameQueryKey(params);
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof checkUsername>>> = ({
+    signal,
+  }) => checkUsername(params, { signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof checkUsername>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type CheckUsernameQueryResult = NonNullable<
+  Awaited<ReturnType<typeof checkUsername>>
+>;
+export type CheckUsernameQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Check whether a username is registered
+ */
+
+export function useCheckUsername<
+  TData = Awaited<ReturnType<typeof checkUsername>>,
+  TError = ErrorType<unknown>,
+>(
+  params: CheckUsernameParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof checkUsername>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getCheckUsernameQueryOptions(params, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
 
 /**
  * @summary Get top completed game sessions for leaderboard

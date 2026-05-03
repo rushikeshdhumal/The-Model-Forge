@@ -15,6 +15,7 @@ import {
   RegisterPlayerResponse,
   LoginPlayerBody,
   LoginPlayerResponse,
+  CheckUsernameResponse,
 } from "@workspace/api-zod";
 
 const router: IRouter = Router();
@@ -143,6 +144,53 @@ router.post("/save-state", async (req, res) => {
   } catch (err) {
     req.log.error({ err }, "Failed to save state");
     res.status(500).json({ error: "Failed to save state" });
+  }
+});
+
+router.get("/check-username", async (req, res) => {
+  const username = String(req.query.username ?? "").trim().toLowerCase();
+  if (!username) {
+    res.status(400).json({ error: "username is required" });
+    return;
+  }
+  try {
+    const rows = await db
+      .select({
+        sessionId: playersTable.sessionId,
+      })
+      .from(playersTable)
+      .where(eq(playersTable.username, username))
+      .limit(1);
+
+    if (rows.length === 0) {
+      const data = CheckUsernameResponse.parse({ exists: false, day: null, scenario: null, wins: null, status: null });
+      res.json(data);
+      return;
+    }
+
+    const sessionRows = await db
+      .select({
+        day: sessionsTable.day,
+        scenario: sessionsTable.scenario,
+        wins: sessionsTable.wins,
+        status: sessionsTable.status,
+      })
+      .from(sessionsTable)
+      .where(eq(sessionsTable.sessionId, rows[0].sessionId))
+      .limit(1);
+
+    const s = sessionRows[0] ?? null;
+    const data = CheckUsernameResponse.parse({
+      exists: true,
+      day: s?.day ?? null,
+      scenario: s?.scenario ?? null,
+      wins: s?.wins ?? null,
+      status: s?.status ?? null,
+    });
+    res.json(data);
+  } catch (err) {
+    req.log.error({ err }, "Failed to check username");
+    res.status(500).json({ error: "Failed to check username" });
   }
 });
 

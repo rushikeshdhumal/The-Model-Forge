@@ -7,6 +7,7 @@ import {
   useGetLeaderboard,
   useRegisterPlayer,
   useLoginPlayer,
+  useCheckUsername,
   getLoadStateQueryKey,
   getGetLeaderboardQueryKey,
 } from "@workspace/api-client-react";
@@ -1051,6 +1052,9 @@ export default function Game() {
   const [authConfirm, setAuthConfirm] = useState("");
   const [authError, setAuthError] = useState("");
   const [pendingCarryOver, setPendingCarryOver] = useState<{ sessionId: string; username: string; isRegister: boolean } | null>(null);
+  const [showLookup, setShowLookup] = useState(false);
+  const [lookupInput, setLookupInput] = useState("");
+  const [lookupQuery, setLookupQuery] = useState("");
   const [showLeaderboard, setShowLeaderboard] = useState(false);
   const [showScenarioPicker, setShowScenarioPicker] = useState(false);
   const [showLanding, setShowLanding] = useState(() => {
@@ -1098,6 +1102,11 @@ export default function Game() {
   const registerMutation = useRegisterPlayer();
   const loginMutation = useLoginPlayer();
   const authPending = registerMutation.isPending || loginMutation.isPending;
+
+  const { data: lookupData, isFetching: lookupFetching, isError: lookupError } = useCheckUsername(
+    { username: lookupQuery },
+    { query: { enabled: !!lookupQuery, queryKey: ["/api/check-username", lookupQuery] } }
+  );
 
   const { data: leaderboardData } = useGetLeaderboard({
     query: { queryKey: getGetLeaderboardQueryKey() },
@@ -1586,7 +1595,13 @@ export default function Game() {
             <div className="space-y-3 pt-1">
               <div className="flex border border-border/40">
                 {(["register", "login"] as const).map((mode) => (
-                  <button key={mode} onClick={() => { setAuthMode(mode); setAuthError(""); }}
+                  <button key={mode} onClick={() => {
+                    setAuthMode(mode);
+                    setAuthError("");
+                    setShowLookup(false);
+                    setLookupInput("");
+                    setLookupQuery("");
+                  }}
                     className={`flex-1 text-[10px] tracking-widest py-1.5 transition-colors ${authMode === mode ? "bg-primary/10 text-primary" : "text-muted-foreground hover:text-foreground"}`}>
                     {mode === "register" ? "NEW PLAYER" : "RETURNING PLAYER"}
                   </button>
@@ -1629,6 +1644,91 @@ export default function Game() {
                   {playerName ? "CANCEL" : "SKIP"}
                 </Button>
               </div>
+
+              {/* Username lookup — only visible in login mode */}
+              {authMode === "login" && (
+                <div className="border-t border-border/30 pt-2">
+                  <button
+                    type="button"
+                    className="text-[9px] text-muted-foreground/60 hover:text-muted-foreground tracking-widest transition-colors w-full text-left"
+                    onClick={() => {
+                      setShowLookup((v) => !v);
+                      setLookupInput("");
+                      setLookupQuery("");
+                    }}
+                  >
+                    {showLookup ? "▲ HIDE LOOKUP" : "▼ NOT SURE OF YOUR USERNAME? LOOK IT UP"}
+                  </button>
+
+                  {showLookup && (
+                    <div className="mt-2 space-y-2">
+                      <div className="flex gap-2">
+                        <input
+                          type="text"
+                          placeholder="e.g. dr_gradient"
+                          value={lookupInput}
+                          maxLength={24}
+                          onChange={(e) => setLookupInput(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter" && lookupInput.trim()) {
+                              setLookupQuery(lookupInput.trim().toLowerCase());
+                            }
+                          }}
+                          className="flex-1 bg-secondary/40 border border-border/40 px-3 py-1.5 text-xs text-foreground placeholder:text-muted-foreground/50 outline-none focus:border-primary/50 tracking-wider"
+                        />
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="shrink-0 border-primary/40 text-primary hover:bg-primary/10 text-[10px] tracking-widest"
+                          disabled={!lookupInput.trim() || lookupFetching}
+                          onClick={() => setLookupQuery(lookupInput.trim().toLowerCase())}
+                        >
+                          {lookupFetching ? "…" : "LOOK UP"}
+                        </Button>
+                      </div>
+
+                      {/* Result */}
+                      {lookupError && (
+                        <p className="text-[10px] text-destructive">Server error — please try again.</p>
+                      )}
+                      {!lookupFetching && !lookupError && lookupData && lookupQuery && (
+                        lookupData.exists ? (
+                          <div className="bg-primary/10 border border-primary/25 px-3 py-2 space-y-0.5">
+                            <div className="text-[10px] text-primary tracking-widest font-bold">
+                              ✓ ACCOUNT FOUND: @{lookupQuery}
+                            </div>
+                            {lookupData.scenario && lookupData.day != null && (
+                              <div className="text-[10px] text-muted-foreground">
+                                {lookupData.scenario} · Day {lookupData.day}/14
+                                {lookupData.wins != null && lookupData.wins > 0 && ` · ${lookupData.wins} win${lookupData.wins !== 1 ? "s" : ""}`}
+                              </div>
+                            )}
+                            <button
+                              type="button"
+                              className="text-[9px] text-primary/70 hover:text-primary underline underline-offset-2 pt-0.5"
+                              onClick={() => {
+                                setAuthUsername(lookupQuery);
+                                setShowLookup(false);
+                                setLookupInput("");
+                                setLookupQuery("");
+                              }}
+                            >
+                              Use this username →
+                            </button>
+                          </div>
+                        ) : (
+                          <div className="bg-secondary/40 border border-border/40 px-3 py-2">
+                            <div className="text-[10px] text-muted-foreground">
+                              No account found for <span className="text-foreground">@{lookupQuery}</span>. Check spelling or create a new account.
+                            </div>
+                          </div>
+                        )
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
+
               {!playerName && (
                 <p className="text-[9px] text-muted-foreground/50 text-center">
                   You can play as a guest — scores won't appear on the leaderboard.

@@ -154,6 +154,14 @@ export interface LeaderboardEntry {
   maxStreak: number;
 }
 
+export interface CheckUsernameResponse {
+  exists: boolean;
+  day?: number | null;
+  scenario?: string | null;
+  wins?: number | null;
+  status?: string | null;
+}
+
 export interface AuthBody {
   /**
    * @minLength 2
@@ -184,4 +192,8 @@ export interface LeaderboardResponse {
 
 export type LoadStateParams = {
   session_id: string;
+};
+
+export type CheckUsernameParams = {
+  username: string;
 };

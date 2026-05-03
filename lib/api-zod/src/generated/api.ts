@@ -227,6 +227,21 @@ export const LoginPlayerResponse = zod.object({
 });
 
 /**
+ * @summary Check whether a username is registered
+ */
+export const CheckUsernameQueryParams = zod.object({
+  username: zod.coerce.string(),
+});
+
+export const CheckUsernameResponse = zod.object({
+  exists: zod.boolean(),
+  day: zod.number().nullish(),
+  scenario: zod.string().nullish(),
+  wins: zod.number().nullish(),
+  status: zod.string().nullish(),
+});
+
+/**
  * @summary Get top completed game sessions for leaderboard
  */
 export const GetLeaderboardResponse = zod.object({
