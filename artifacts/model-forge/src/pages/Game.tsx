@@ -104,7 +104,7 @@ const CODEX_STATIC_METRICS = [
       "Run an emergency feature refresh (one-time reset)",
       "Fix the upstream pipeline delay event to restore normal cadence",
     ],
-    lossThreshold: "> 36h",
+    lossThreshold: "> 32h",
   },
   {
     name: "INFERENCE COST",
@@ -633,7 +633,7 @@ const CODEX_WIN_LOSS = [
   { label: "Precision ≤ 0%", type: "loss", note: "Model outputs are effectively random. Immediate retrain or rollback required." },
   { label: "Recall ≤ 0%", type: "loss", note: "Model detects nothing. Complete miss rate on all positive cases." },
   { label: "SLA Adherence ≤ 0%", type: "loss", note: "Complete production outage. No inference requests are completing." },
-  { label: "Feature Staleness > 36h", type: "loss", note: "Features are 36+ hours old. The model is predicting on a distribution that no longer exists — training-serving skew is catastrophic." },
+  { label: "Feature Staleness > 32h", type: "loss", note: "Features are 32+ hours old. The model is predicting on a distribution that no longer exists — training-serving skew is catastrophic." },
   { label: "Inference Cost ≥ 100", type: "loss", note: "Infrastructure budget exhausted. The cluster shuts down." },
   { label: "Survive all 14 days", type: "win", note: "You maintained production without a critical outage. Congratulations — most models don't." },
 ];

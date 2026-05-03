@@ -5,8 +5,8 @@ export const DIFFICULTY_BY_SCENARIO: Record<string, number> = {
   uber: 3, facebook: 3, tay: 3, stripe: 3, amazon: 3, twitter: 3,
 };
 
-// Default (tier 1) gets a +10 bonus so that perfect play (max raw = 90) can reach exactly S ≥ 100.
-// Tier 2 and 3 bonuses extend this further for harder scenarios.
+// Tier bonuses shift scores upward; the S-grade threshold is also difficulty-aware (tier 1: S ≥ 90,
+// tier 2/3: S ≥ 100) because the CI/CD cap at 85% limits Default's metricPts to ~35 (max achievable ≈ 95).
 const DIFFICULTY_BONUS: Record<number, number> = { 1: 10, 2: 15, 3: 25 };
 
 export function computeRunScore(state: GameState): { score: number; grade: string } {
@@ -20,8 +20,11 @@ export function computeRunScore(state: GameState): { score: number; grade: strin
   const survivalPts = Math.min(daysCompleted / 14, 1) * 20;
   const winPts = state.status === "won" ? 10 : 0;
   const score = Math.round(metricPts + streakPts + survivalPts + winPts + bonus);
+  // S threshold scales with difficulty: tier-1 (Default) CI/CD cap at 85 limits metricPts to ~35,
+  // so perfect play ≈ 95 — S at ≥90 is achievable. Harder tiers have higher bonuses → S at ≥100.
+  const sThreshold = difficulty === 1 ? 90 : 100;
   let grade = "D";
-  if (score >= 100) grade = "S";
+  if (score >= sThreshold) grade = "S";
   else if (score >= 82) grade = "A";
   else if (score >= 65) grade = "B";
   else if (score >= 48) grade = "C";
@@ -86,6 +89,13 @@ function advanceDay(s: GameState): GameState {
   // reaches 30h by day 14 (safe). Loss requires compounding events (e.g. Pipeline Delay A) + ignoring
   // the triggered stale_features event (> 24h) three consecutive times.
   s.metrics.slaAdherence = Math.max(0, s.metrics.slaAdherence - 0.5);
+
+  // High skew compounds accuracy decay — features diverged from training distribution degrade predictions
+  // faster than normal concept drift alone. This gives skew a tangible daily mechanic consequence.
+  if (s.metrics.skew === "High") {
+    s.metrics.precision = Math.max(0, s.metrics.precision - 1);
+    s.metrics.recall = Math.max(0, s.metrics.recall - 1);
+  }
 
   if (s.ciCd.autoRetrain) {
     // CI/CD retraining counters drift but has diminishing returns above 85% — data distribution
@@ -176,12 +186,23 @@ export function getEventForDay(state: GameState): GameEvent | null {
           label: "Audit feature distributions then retrain on the last 30 days",
           effect: (s) => {
             s.metrics.inferenceCost += 3;
-            s.futureEffects.push({
-              triggerDay: s.day + 3,
-              metric: "precision",
-              delta: 10,
-              message: "Distribution audit confirmed drift; targeted retrain on recent data resolved it",
-            });
+            // A retrain on recent data corrects learned patterns for both the positive and negative class —
+            // precision recovers because the model re-learns the current feature-label mapping,
+            // recall recovers because it re-learns which signals actually indicate positives.
+            s.futureEffects.push(
+              {
+                triggerDay: s.day + 3,
+                metric: "precision",
+                delta: 10,
+                message: "Distribution audit confirmed drift; targeted retrain on recent data resolved both precision and recall",
+              },
+              {
+                triggerDay: s.day + 3,
+                metric: "recall",
+                delta: 6,
+                message: "Retrain on recent data restored detection coverage as well as precision",
+              }
+            );
           },
         },
         {
@@ -749,8 +770,11 @@ export function getEventForDay(state: GameState): GameEvent | null {
           id: "A",
           label: "Emergency retrain to recover detection coverage",
           effect: (s) => {
+            // Full rebuild on latest data restores both metrics — same as the precision emergency retrain.
+            // Precision is NOT sacrificed here: that trade-off only happens when lowering the decision
+            // threshold (Choice B), not when doing a full retrain on updated ground-truth labels.
             s.metrics.recall += 20;
-            s.metrics.precision -= 5;
+            s.metrics.precision += 8;
             s.metrics.inferenceCost += 5;
           },
         },
@@ -840,16 +864,12 @@ export function getEventForDay(state: GameState): GameEvent | null {
         },
         {
           id: "C",
-          label: "Investigate root cause — full fix deployed in 24h",
+          label: "Investigate root cause — fix deployed same day",
           effect: (s) => {
-            // +5 immediately to acknowledge partial triage, +15 next day when fix is deployed
-            s.metrics.slaAdherence += 5;
-            s.futureEffects.push({
-              triggerDay: s.day + 1,
-              metric: "slaAdherence",
-              delta: 15,
-              message: "Root cause investigation complete — fix deployed, SLA restored",
-            });
+            // Full investigation and fix in one cycle: the highest SLA recovery of the three options
+            // but requires more engineering time than a fallback switch or raw scaling.
+            // No future effect to prevent stacking this choice across multiple triggered events.
+            s.metrics.slaAdherence += 20;
           },
         },
       ],
@@ -1348,7 +1368,7 @@ export function generateDailyBrief(state: GameState): DailyBriefData | null {
     }
   } else if (m.featureStaleness > 24) {
     severity = "warning";
-    diagnosis = `WARNING: Feature staleness at ${m.featureStaleness.toFixed(0)}h (threshold: 36h). Enable Feature Store or force refresh this turn.`;
+    diagnosis = `WARNING: Feature staleness at ${m.featureStaleness.toFixed(0)}h (threshold: 32h). Enable Feature Store or force refresh this turn.`;
   } else if (minAccuracy < 65) {
     severity = "warning";
     diagnosis = `WARNING: Model quality degrading (${labels.precision} ${m.precision.toFixed(0)}%, ${labels.recall} ${m.recall.toFixed(0)}%). Retrain or promote a staged candidate before the triggered alert threshold.`;
