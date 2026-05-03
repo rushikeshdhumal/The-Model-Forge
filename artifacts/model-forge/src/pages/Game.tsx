@@ -436,6 +436,9 @@ export default function Game() {
   const [authConfirm, setAuthConfirm] = useState("");
   const [authError, setAuthError] = useState("");
   const [showLeaderboard, setShowLeaderboard] = useState(false);
+  const [showLanding, setShowLanding] = useState(true);
+  const [showGameOver, setShowGameOver] = useState(false);
+  const [gameOverCopied, setGameOverCopied] = useState(false);
   const logRef = useRef<HTMLDivElement>(null);
 
   // ---- Session bootstrap ----
@@ -471,18 +474,20 @@ export default function Game() {
     if (loadData) {
       const loaded = (loadData.state ?? DEFAULT_STATE) as GameState;
       setGameState(loaded);
-      if (loadData.isDefault && loaded.day === 1 && loaded.eventLog.length === 0) {
-        setShowTutorial(true);
-      } else if (!playerName) {
-        setAuthMode("login");
-        setAuthUsername(""); setAuthPassword(""); setAuthConfirm(""); setAuthError("");
-        setShowIdentity(true);
-      }
       const ev = getEventForDay(loaded);
       setCurrentEvent(ev);
       setEventResolved(false);
     }
   }, [loadData]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Auto-open game-over screen when an active game finishes
+  const prevStatusRef = useRef<GameState["status"]>("playing");
+  useEffect(() => {
+    if (!showLanding && gameState.status !== "playing" && prevStatusRef.current === "playing") {
+      setShowGameOver(true);
+    }
+    prevStatusRef.current = gameState.status;
+  }, [gameState.status, showLanding]);
 
   const validateAuthFields = (): string | null => {
     const name = authUsername.trim().toLowerCase();
@@ -666,10 +671,246 @@ export default function Game() {
     navigator.clipboard.writeText(url).catch(() => {});
   };
 
+  // ---- Landing page helpers ----
+  const isNewSession = !loadData || (gameState.day === 1 && gameState.eventLog.length === 0);
+
+  const handleContinueGame = () => {
+    setShowLanding(false);
+    if (!playerName) {
+      setAuthMode("login");
+      setAuthUsername(""); setAuthPassword(""); setAuthConfirm(""); setAuthError("");
+      setShowIdentity(true);
+    }
+    if (gameState.status !== "playing") setShowGameOver(true);
+  };
+
+  const handleNewGame = () => {
+    setShowLanding(false);
+    if (!isNewSession) {
+      const reset: GameState = { ...DEFAULT_STATE, sessionId: sessionId ?? "", wins: gameState.wins };
+      persistState(reset);
+      setCurrentEvent(getEventForDay(reset));
+      setEventResolved(false);
+      setHistoryView(null);
+    }
+    setShowTutorial(true);
+  };
+
+  // ---- Post-game helpers ----
+  const fullRunChartData = [
+    ...gameState.history.map((h: GameState) => ({
+      day: `D${h.day}`,
+      Precision: Math.round(h.metrics.precision),
+      Recall: Math.round(h.metrics.recall),
+      SLA: Math.round(h.metrics.slaAdherence),
+    })),
+    {
+      day: `D${gameState.day}`,
+      Precision: Math.round(gameState.metrics.precision),
+      Recall: Math.round(gameState.metrics.recall),
+      SLA: Math.round(gameState.metrics.slaAdherence),
+    },
+  ];
+
+  const copyGameOverSummary = () => {
+    const outcome = gameState.status === "won" ? "survived" : "failed";
+    const text = `I ${outcome} Day ${gameState.day}/14 on The Model Forge! Final: Precision ${gameState.metrics.precision.toFixed(0)}%, Recall ${gameState.metrics.recall.toFixed(0)}%, SLA ${gameState.metrics.slaAdherence.toFixed(0)}%. Play at ${window.location.origin}`;
+    navigator.clipboard.writeText(text).catch(() => {});
+    setGameOverCopied(true);
+    setTimeout(() => setGameOverCopied(false), 2000);
+  };
+
   if (!sessionId) {
     return (
       <div className="min-h-screen bg-background text-primary font-mono flex items-center justify-center">
         <div className="animate-pulse text-lg tracking-widest">INITIALIZING SYSTEM...</div>
+      </div>
+    );
+  }
+
+  if (showLanding) {
+    return (
+      <div className="min-h-screen bg-background text-foreground font-mono flex flex-col">
+        {/* Landing header */}
+        <div className="border-b border-border/40 px-6 py-4 flex items-center justify-between">
+          <div>
+            <h1 className="text-xl font-bold text-primary tracking-tighter">
+              THE MODEL FORGE<span className="animate-pulse">_</span>
+            </h1>
+            <p className="text-[10px] text-muted-foreground tracking-widest">ML PRODUCTION SIMULATOR</p>
+          </div>
+          <button
+            onClick={() => { setAuthMode(playerName ? "login" : "register"); setAuthUsername(""); setAuthPassword(""); setAuthConfirm(""); setAuthError(""); setShowIdentity(true); }}
+            className="text-[11px] text-primary/60 border border-primary/25 px-2.5 py-1 tracking-widest hover:border-primary/50 hover:text-primary transition-colors"
+          >
+            {playerName ? playerName.toUpperCase() : "SIGN IN / REGISTER"}
+          </button>
+        </div>
+
+        {/* Hero */}
+        <div className="flex-1 flex flex-col items-center justify-center px-6 py-12 max-w-2xl mx-auto w-full text-center gap-8">
+          <div className="space-y-3">
+            <div className="text-4xl md:text-5xl font-bold text-primary tracking-tighter leading-tight">
+              YOUR AI MODEL<br />IS LIVE IN PRODUCTION.
+            </div>
+            <p className="text-base text-foreground/70 leading-relaxed max-w-lg mx-auto">
+              Bad things happen every day. A data pipeline breaks. A prediction drifts.
+              Costs spike. Make the right calls to keep it running for <span className="text-primary font-semibold">14 days</span>.
+            </p>
+          </div>
+
+          {/* How to play */}
+          <div className="grid grid-cols-3 gap-4 w-full">
+            {[
+              { step: "01", title: "An incident hits", desc: "Each day brings a new crisis affecting your model." },
+              { step: "02", title: "Choose your response", desc: "Pick from real-world mitigation strategies." },
+              { step: "03", title: "Watch the ripple effects", desc: "Every decision has consequences — some delayed." },
+            ].map((s) => (
+              <div key={s.step} className="border border-border/40 bg-card/30 p-4 text-left space-y-1.5">
+                <div className="text-primary text-xs tracking-widest font-bold">{s.step}</div>
+                <div className="text-sm font-semibold text-foreground">{s.title}</div>
+                <div className="text-xs text-muted-foreground leading-relaxed">{s.desc}</div>
+              </div>
+            ))}
+          </div>
+
+          {/* Metrics pills */}
+          <div className="space-y-2 w-full">
+            <p className="text-[10px] tracking-widest text-muted-foreground">KEEP THESE 6 METRICS ALIVE</p>
+            <div className="flex flex-wrap justify-center gap-2">
+              {[
+                { name: "Precision", desc: "How accurate your predictions are" },
+                { name: "Recall", desc: "How much your model catches" },
+                { name: "SLA Adherence", desc: "Uptime and response-time promises" },
+                { name: "Feature Freshness", desc: "How stale your training data is" },
+                { name: "Inference Cost", desc: "What you spend to serve results" },
+                { name: "Data Skew", desc: "Bias creeping into your outputs" },
+              ].map((m) => (
+                <div key={m.name} className="group relative">
+                  <div className="border border-primary/30 bg-primary/5 px-3 py-1 text-xs text-primary cursor-default hover:bg-primary/10 transition-colors">
+                    {m.name}
+                  </div>
+                  <div className="absolute bottom-full mb-1.5 left-1/2 -translate-x-1/2 bg-card border border-border text-xs text-muted-foreground px-2 py-1 whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-10">
+                    {m.desc}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* CTA buttons */}
+          <div className="flex flex-col sm:flex-row gap-3 w-full max-w-sm">
+            {!isNewSession ? (
+              <>
+                <Button
+                  className="flex-1 font-bold tracking-widest h-12 text-sm"
+                  onClick={handleContinueGame}
+                >
+                  CONTINUE — DAY {gameState.day}/14
+                </Button>
+                <Button
+                  variant="outline"
+                  className="flex-1 border-border/50 text-muted-foreground hover:text-foreground text-xs tracking-widest h-12"
+                  onClick={handleNewGame}
+                >
+                  START NEW GAME
+                </Button>
+              </>
+            ) : (
+              <Button
+                className="w-full font-bold tracking-widest h-14 text-base"
+                onClick={handleNewGame}
+              >
+                ▶ START NEW GAME
+              </Button>
+            )}
+          </div>
+
+          {/* Mini leaderboard */}
+          {leaderboardData?.entries && leaderboardData.entries.length > 0 && (
+            <div className="w-full border border-border/40 bg-card/20 p-4 space-y-2">
+              <div className="flex justify-between items-center">
+                <span className="text-[10px] tracking-widest text-muted-foreground">TOP SURVIVORS</span>
+                <button onClick={() => { setShowLanding(false); setShowLeaderboard(true); }} className="text-[10px] text-primary/60 hover:text-primary transition-colors">
+                  VIEW ALL →
+                </button>
+              </div>
+              {leaderboardData.entries.slice(0, 3).map((e, i) => {
+                const medal = i === 0 ? "🥇" : i === 1 ? "🥈" : "🥉";
+                return (
+                  <div key={e.sessionId} className="flex items-center gap-3 text-xs">
+                    <span>{medal}</span>
+                    <span className="text-foreground/80 flex-1 truncate">
+                      {e.username ?? <span className="italic text-muted-foreground/50">anonymous</span>}
+                    </span>
+                    <span className="text-primary text-[11px]">Day {e.day}/14</span>
+                    <span className="text-muted-foreground text-[11px]">{e.scenario}</span>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
+        {/* Auth dialog also available from landing */}
+        <Dialog open={showIdentity} onOpenChange={(open) => { if (!open && playerName) setShowIdentity(false); }}>
+          <DialogContent className="bg-card border-primary/30 font-mono max-w-sm">
+            <DialogHeader>
+              <DialogTitle className="text-primary tracking-widest text-sm">
+                {authMode === "register" ? "CREATE ACCOUNT" : "SIGN IN"}
+              </DialogTitle>
+              <DialogDescription className="text-muted-foreground text-xs leading-relaxed">
+                {authMode === "register"
+                  ? "Your progress is saved to your account automatically."
+                  : "Sign in to restore your saved run."}
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-3 pt-1">
+              <div className="flex border border-border/40">
+                {(["register", "login"] as const).map((mode) => (
+                  <button key={mode} onClick={() => { setAuthMode(mode); setAuthError(""); }}
+                    className={`flex-1 text-[10px] tracking-widest py-1.5 transition-colors ${authMode === mode ? "bg-primary/10 text-primary" : "text-muted-foreground hover:text-foreground"}`}>
+                    {mode === "register" ? "NEW PLAYER" : "RETURNING PLAYER"}
+                  </button>
+                ))}
+              </div>
+              <div>
+                <div className="text-[10px] tracking-widest text-muted-foreground mb-1">USERNAME</div>
+                <input type="text" placeholder="e.g. dr_gradient" value={authUsername} autoFocus maxLength={24}
+                  onChange={(e) => { setAuthUsername(e.target.value); setAuthError(""); }}
+                  onKeyDown={(e) => { if (e.key === "Enter") authMode === "register" ? handleRegister() : handleLogin(); }}
+                  className="w-full bg-secondary/40 border border-border/40 px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground/50 outline-none focus:border-primary/50 tracking-wider" />
+              </div>
+              <div>
+                <div className="text-[10px] tracking-widest text-muted-foreground mb-1">PASSWORD</div>
+                <input type="password" placeholder="Min. 4 characters" value={authPassword} maxLength={72}
+                  onChange={(e) => { setAuthPassword(e.target.value); setAuthError(""); }}
+                  onKeyDown={(e) => { if (e.key === "Enter") authMode === "register" ? handleRegister() : handleLogin(); }}
+                  className="w-full bg-secondary/40 border border-border/40 px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground/50 outline-none focus:border-primary/50" />
+              </div>
+              {authMode === "register" && (
+                <div>
+                  <div className="text-[10px] tracking-widest text-muted-foreground mb-1">CONFIRM PASSWORD</div>
+                  <input type="password" placeholder="Repeat password" value={authConfirm} maxLength={72}
+                    onChange={(e) => { setAuthConfirm(e.target.value); setAuthError(""); }}
+                    onKeyDown={(e) => { if (e.key === "Enter") handleRegister(); }}
+                    className="w-full bg-secondary/40 border border-border/40 px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground/50 outline-none focus:border-primary/50" />
+                </div>
+              )}
+              {authError && <p className="text-[10px] text-destructive border-l-2 border-destructive/40 pl-2">{authError}</p>}
+              <div className="flex gap-2 pt-1">
+                <Button className="flex-1 font-bold tracking-widest" disabled={authPending}
+                  onClick={authMode === "register" ? handleRegister : handleLogin}>
+                  {authPending ? "CONNECTING…" : authMode === "register" ? "CREATE ACCOUNT" : "SIGN IN"}
+                </Button>
+                {playerName && (
+                  <Button variant="outline" className="border-border/40 text-muted-foreground text-xs"
+                    onClick={() => setShowIdentity(false)}>CANCEL</Button>
+                )}
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
       </div>
     );
   }
@@ -959,36 +1200,25 @@ export default function Game() {
                   </>
                 )
               ) : (
-                <div className="space-y-4">
-                  <div
-                    className={`border p-4 ${
-                      gameState.status === "won"
-                        ? "border-primary/50 bg-primary/5 text-primary"
-                        : "border-destructive/50 bg-destructive/5 text-destructive"
-                    }`}
-                  >
+                <div className="space-y-3">
+                  <div className={`border p-4 ${gameState.status === "won" ? "border-primary/50 bg-primary/5 text-primary" : "border-destructive/50 bg-destructive/5 text-destructive"}`}>
                     <div className="font-bold text-lg tracking-widest mb-1">
-                      {gameState.status === "won" ? "PRODUCTION READY" : "SYSTEM FAILURE"}
+                      {gameState.status === "won" ? "✓ PRODUCTION READY" : "✗ SYSTEM FAILURE"}
                     </div>
                     <p className="text-sm opacity-80">
                       {gameState.status === "won"
-                        ? `You survived all 14 days. Final precision: ${gameState.metrics.precision.toFixed(0)}%, recall: ${gameState.metrics.recall.toFixed(0)}%`
+                        ? `All 14 days survived. P:${gameState.metrics.precision.toFixed(0)}% R:${gameState.metrics.recall.toFixed(0)}%`
                         : "A critical metric reached 0 or exceeded safety thresholds."}
                     </p>
                   </div>
-                  <Button
-                    className="w-full"
-                    variant={gameState.status === "won" ? "default" : "destructive"}
-                    onClick={handleReset}
-                    data-testid="button-play-again"
-                  >
+                  <Button className="w-full text-xs tracking-widest" variant="outline"
+                    onClick={() => setShowGameOver(true)}>
+                    VIEW FULL RESULTS →
+                  </Button>
+                  <Button className="w-full" variant={gameState.status === "won" ? "default" : "destructive"}
+                    onClick={handleReset} data-testid="button-play-again">
                     {gameState.status === "won" ? "PLAY AGAIN" : "TRY AGAIN"}
                   </Button>
-                  {gameState.status === "won" && (
-                    <Button variant="outline" className="w-full text-xs" onClick={shareRun}>
-                      COPY SHAREABLE LINK
-                    </Button>
-                  )}
                 </div>
               )}
             </CardContent>
@@ -1206,7 +1436,118 @@ export default function Game() {
         </div>
       </main>
 
-      {/* Tutorial Modal */}
+      {/* Post-Game Results Modal */}
+      <Dialog open={showGameOver} onOpenChange={setShowGameOver}>
+        <DialogContent className="bg-card border-primary/30 font-mono max-w-3xl w-full max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className={`tracking-widest text-lg ${gameState.status === "won" ? "text-primary" : "text-destructive"}`}>
+              {gameState.status === "won" ? "✓ PRODUCTION SURVIVED" : "✗ SYSTEM FAILURE"}
+            </DialogTitle>
+            <DialogDescription asChild>
+              <div className="text-muted-foreground text-xs mt-1 space-x-3">
+                <span>Day {gameState.day - 1}/14</span>
+                <span>·</span>
+                <span className="capitalize">{gameState.scenario}</span>
+                {playerName && <><span>·</span><span className="text-primary/70">{playerName}</span></>}
+              </div>
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-5 mt-2">
+            {/* Final metric row */}
+            <div className="grid grid-cols-3 gap-3">
+              {[
+                { label: "PRECISION", value: gameState.metrics.precision, good: gameState.metrics.precision >= 70 },
+                { label: "RECALL", value: gameState.metrics.recall, good: gameState.metrics.recall >= 70 },
+                { label: "SLA", value: gameState.metrics.slaAdherence, good: gameState.metrics.slaAdherence >= 90 },
+              ].map((m) => (
+                <div key={m.label} className={`border p-3 text-center ${m.good ? "border-primary/30 bg-primary/5" : "border-destructive/30 bg-destructive/5"}`}>
+                  <div className="text-[10px] tracking-widest text-muted-foreground mb-1">{m.label}</div>
+                  <div className={`text-2xl font-bold ${m.good ? "text-primary" : "text-destructive"}`}>
+                    {m.value.toFixed(0)}%
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* Full run chart */}
+            {fullRunChartData.length > 1 && (
+              <div>
+                <div className="text-[10px] tracking-widest text-muted-foreground mb-2">METRIC HISTORY — FULL RUN</div>
+                <ResponsiveContainer width="100%" height={160}>
+                  <LineChart data={fullRunChartData} margin={{ top: 4, right: 16, left: -20, bottom: 0 }}>
+                    <CartesianGrid strokeDasharray="2 4" stroke="rgba(255,255,255,0.04)" />
+                    <XAxis dataKey="day" tick={{ fontSize: 9, fill: "hsl(var(--muted-foreground))" }} />
+                    <YAxis domain={[0, 100]} tick={{ fontSize: 9, fill: "hsl(var(--muted-foreground))" }} />
+                    <RechartsTooltip
+                      contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", fontSize: 10, fontFamily: "inherit" }}
+                    />
+                    <Line type="monotone" dataKey="Precision" stroke="hsl(var(--primary))" strokeWidth={2} dot={false} />
+                    <Line type="monotone" dataKey="Recall" stroke="#60a5fa" strokeWidth={1.5} dot={false} />
+                    <Line type="monotone" dataKey="SLA" stroke="#f59e0b" strokeWidth={1} dot={false} strokeDasharray="3 3" />
+                  </LineChart>
+                </ResponsiveContainer>
+                <div className="flex gap-4 justify-center mt-1">
+                  {[["Precision", "hsl(var(--primary))"], ["Recall", "#60a5fa"], ["SLA", "#f59e0b"]].map(([k, c]) => (
+                    <span key={k} className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
+                      <span className="inline-block w-4 h-0.5" style={{ background: c }} />
+                      {k}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Key decisions */}
+            {gameState.eventLog.filter((e) => e.choice).length > 0 && (
+              <div>
+                <div className="text-[10px] tracking-widest text-muted-foreground mb-2">KEY DECISIONS</div>
+                <div className="space-y-1.5 max-h-36 overflow-y-auto pr-1">
+                  {gameState.eventLog.filter((e) => e.choice).map((e, i) => (
+                    <div key={i} className="flex gap-2 text-xs border-l-2 border-primary/30 pl-2">
+                      <span className="text-primary font-bold shrink-0">D{e.day}</span>
+                      <span className="text-muted-foreground/70 truncate">{e.message.slice(0, 60)}{e.message.length > 60 ? "…" : ""}</span>
+                      <span className="text-primary/60 shrink-0 ml-auto">→ {e.choice!.slice(0, 30)}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Post-mortem (loss only) */}
+            {gameState.status === "lost" && postMortem.length > 0 && (
+              <div>
+                <div className="text-[10px] tracking-widest text-destructive mb-2">POST-MORTEM</div>
+                <ul className="space-y-1.5">
+                  {postMortem.map((item, i) => (
+                    <li key={i} className="text-xs border-l-2 border-destructive/50 pl-2 text-foreground/80 leading-relaxed">{item}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
+            {/* Actions */}
+            <div className="flex flex-wrap gap-2 pt-1 border-t border-border/30">
+              <Button
+                className="flex-1 font-bold tracking-widest"
+                variant={gameState.status === "won" ? "default" : "destructive"}
+                onClick={() => { setShowGameOver(false); handleReset(); }}
+              >
+                {gameState.status === "won" ? "PLAY AGAIN" : "TRY AGAIN"}
+              </Button>
+              <Button variant="outline" className="text-xs tracking-widest border-border/50"
+                onClick={() => { setShowGameOver(false); setShowLeaderboard(true); }}>
+                VIEW LEADERBOARD
+              </Button>
+              <Button variant="outline" className="text-xs tracking-widest border-border/50"
+                onClick={copyGameOverSummary}>
+                {gameOverCopied ? "COPIED!" : "COPY RESULT"}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
       {/* Leaderboard Modal */}
       <Dialog open={showLeaderboard} onOpenChange={setShowLeaderboard}>
         <DialogContent className="bg-card border-primary/30 font-mono max-w-2xl w-full">
