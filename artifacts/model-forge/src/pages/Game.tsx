@@ -564,7 +564,7 @@ export default function Game() {
     );
   };
 
-  const { theme, toggleTheme, colorScheme, setColorScheme } = useTheme();
+  const { theme, toggleTheme } = useTheme();
 
   useEffect(() => {
     document.title = "The Model Forge | ML Production Simulator";
@@ -770,16 +770,6 @@ export default function Game() {
             >
               {theme === "dark" ? "☀ LIGHT" : "◗ DARK"}
             </button>
-            <select
-              value={colorScheme}
-              onChange={(e) => setColorScheme(e.target.value as "default" | "high-contrast" | "metric-driven")}
-              aria-label="Color scheme"
-              className="text-[11px] text-muted-foreground/70 border border-border/40 px-2 py-1 tracking-widest bg-background hover:border-primary/40 hover:text-primary transition-colors cursor-pointer focus:outline-none focus-visible:outline focus-visible:outline-2"
-            >
-              <option value="default">DEFAULT</option>
-              <option value="high-contrast">HIGH CONTRAST</option>
-              <option value="metric-driven">METRIC COLORS</option>
-            </select>
             <button
               onClick={() => { setAuthMode(playerName ? "login" : "register"); setAuthUsername(""); setAuthPassword(""); setAuthConfirm(""); setAuthError(""); setShowIdentity(true); }}
               className="text-[11px] text-primary/60 border border-primary/25 px-2.5 py-1 tracking-widest hover:border-primary/50 hover:text-primary transition-colors"
@@ -1081,16 +1071,6 @@ export default function Game() {
             >
               {theme === "dark" ? "☀" : "◗"}
             </button>
-            <select
-              value={colorScheme}
-              onChange={(e) => setColorScheme(e.target.value as "default" | "high-contrast" | "metric-driven")}
-              aria-label="Color scheme"
-              className="text-[11px] text-muted-foreground/70 border border-border/40 px-2 py-1 tracking-widest bg-background hover:border-primary/40 hover:text-primary transition-colors cursor-pointer focus:outline-none focus-visible:outline focus-visible:outline-2"
-            >
-              <option value="default">◈</option>
-              <option value="high-contrast">◈ HC</option>
-              <option value="metric-driven">◈ MD</option>
-            </select>
           </div>
         </div>
       </header>
