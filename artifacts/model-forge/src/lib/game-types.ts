@@ -58,7 +58,7 @@ export const DEFAULT_STATE: GameState = {
     models: [{ id: "model_v1", type: "XGBoost", version: "1.0", stage: "production", trainedOnDay: 0, dataVersion: "dataset_20250428", accuracy: 85, cost: 0.10, latency: 15, explainability: "Medium" }],
     productionModelId: "model_v1"
   },
-  featureStore: { enabled: false, stalenessHours: 6, featureVersions: ["user_ltv_v1"] },
+  featureStore: { enabled: false, stalenessHours: 0, featureVersions: [] },
   ciCd: { autoRetrain: false, testPassRate: 1.0 },
   eventLog: [],
   futureEffects: [],

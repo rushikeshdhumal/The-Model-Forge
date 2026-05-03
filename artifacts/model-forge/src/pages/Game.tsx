@@ -176,7 +176,7 @@ function getCodexMetrics(scenario: string) {
       recovery: [
         "Retrain on a fresh dataset with a larger, more representative sample",
         "Promote a staged model that was trained more recently",
-        "Add a validation set that better mirrors production distribution",
+        "Set up production monitoring to detect distribution shift before it crosses alert thresholds",
         "Enable CI/CD auto-retraining to keep the model current",
       ],
     },
@@ -364,10 +364,10 @@ function getCodexMetrics(scenario: string) {
         "Passive decay as distribution slowly shifts away from training baseline",
       ],
       recovery: [
-        "Adjust the classification threshold downward to catch more positives",
-        "Retrain with oversampled minority-class examples",
+        "Retrain with oversampled minority-class examples to address minority class under-learning",
         "Switch to a model type better suited to imbalanced data (e.g. Ensemble)",
-        "Add recall as an explicit optimization target alongside precision",
+        "Lower the classification decision threshold — this trades some precision for higher recall without retraining",
+        "Add recall as an explicit optimization target alongside precision in the loss function",
       ],
     },
     tesla: {

@@ -149,6 +149,50 @@ export function getEventForDay(state: GameState): GameEvent | null {
 
   // ---- Scenario-specific unique events ----
 
+  // DEFAULT: Silent concept drift — the scenario's signature learning event
+  if (sc === "default" && d === 5) {
+    return {
+      id: "default_silent_drift",
+      eventType: "drift",
+      title: "SILENT CONCEPT DRIFT DETECTED",
+      description:
+        "Model monitoring flagged a 12% shift in the input feature distribution over the past 5 days. Your model's confidence on recent predictions has quietly dropped — precision hasn't breached an alert threshold yet, but the trend is unmistakable. This is the slow-burn failure mode that ends careers.",
+      choices: [
+        {
+          id: "A",
+          label: "Enable CI/CD auto-retraining on a rolling data window",
+          effect: (s) => {
+            s.ciCd.autoRetrain = true;
+            s.metrics.precision += 2;
+          },
+        },
+        {
+          id: "B",
+          label: "Audit feature distributions then retrain on the last 30 days",
+          effect: (s) => {
+            s.metrics.inferenceCost += 3;
+            s.futureEffects.push({
+              triggerDay: s.day + 3,
+              metric: "precision",
+              delta: 10,
+              message: "Distribution audit confirmed drift; targeted retrain on recent data resolved it",
+            });
+          },
+        },
+        {
+          id: "C",
+          label: "No threshold breach yet — monitor for another week",
+          effect: (s) => {
+            s.futureEffects.push(
+              { triggerDay: s.day + 2, metric: "precision", delta: -7, message: "Silent drift compounded — model quality degrading ahead of threshold alerts" },
+              { triggerDay: s.day + 4, metric: "recall", delta: -6, message: "Untreated drift reached recall — the model is now missing real signals too" }
+            );
+          },
+        },
+      ],
+    };
+  }
+
   // ZILLOW: Regression overfitting — backtest vs live error divergence
   if (sc === "zillow" && d === 3) {
     return {
@@ -666,7 +710,8 @@ export function getEventForDay(state: GameState): GameEvent | null {
           id: "B",
           label: "Rollback to last stable checkpoint",
           effect: (s) => {
-            s.metrics.precision = Math.max(s.metrics.precision + 15, 72);
+            // Rollback recovers some precision but the old model may be stale on current distribution
+            s.metrics.precision += 15;
             s.metrics.recall -= 10;
           },
         },
@@ -770,7 +815,11 @@ export function getEventForDay(state: GameState): GameEvent | null {
       description: "Upstream data pipeline delayed 3 hours due to infrastructure issues.",
       choices: [
         { id: "A", label: "Delay feature ingest", effect: (s) => { s.metrics.featureStaleness += 4; } },
-        { id: "B", label: "Use cached features", effect: (s) => { s.metrics.precision -= 2; } },
+        { id: "B", label: "Use cached features", effect: (s) => {
+          s.metrics.precision -= 2;
+          // Serving stale cached features widens training-serving skew
+          if (s.metrics.skew === "Low") s.metrics.skew = "Medium";
+        } },
         { id: "C", label: "Halt predictions temporarily", effect: (s) => { s.metrics.slaAdherence -= 5; } },
       ],
     },
@@ -784,6 +833,8 @@ export function getEventForDay(state: GameState): GameEvent | null {
           id: "A",
           label: "Promote canary to production",
           effect: (s) => {
+            // A better model improves both precision and recall — not just one axis
+            s.metrics.precision += 3;
             s.metrics.recall += 5;
             const newId = `model_v${s.day}`;
             const canaryType = ["tesla", "netflix", "google", "tay", "facebook"].includes(s.scenario)
@@ -807,7 +858,9 @@ export function getEventForDay(state: GameState): GameEvent | null {
           id: "A",
           label: "Retrain immediately",
           effect: (s) => {
+            // More data and fresher distribution improves both quality metrics
             s.metrics.precision += 8;
+            s.metrics.recall += 5;
             s.metrics.inferenceCost += 5;
             const newId = `model_v${s.day}`;
             const retrainType = ["tesla", "netflix", "google", "tay", "facebook"].includes(s.scenario)
@@ -834,7 +887,8 @@ export function getEventForDay(state: GameState): GameEvent | null {
       choices: [
         { id: "A", label: "Switch to on-demand instances", effect: (s) => { s.metrics.inferenceCost += 15; } },
         { id: "B", label: "Retry on next spot window", effect: (s) => { s.metrics.slaAdherence -= 8; } },
-        { id: "C", label: "Queue requests — degrade gracefully", effect: (s) => { s.metrics.recall -= 3; } },
+        // Graceful degradation queues requests — throughput drops (SLA impact), not the model's recall quality
+        { id: "C", label: "Queue requests — degrade gracefully", effect: (s) => { s.metrics.slaAdherence -= 5; } },
       ],
     },
     {
@@ -852,7 +906,13 @@ export function getEventForDay(state: GameState): GameEvent | null {
           },
         },
         { id: "B", label: "Schedule during off-peak maintenance", effect: (_s) => {} },
-        { id: "C", label: "Accept risk — delay indefinitely", effect: (s) => { s.futureEffects.push({ triggerDay: s.day + 2, metric: "skewLevel", delta: 1, message: "Unpatched vulnerability exploited — Skew HIGH" }); } },
+        // CVE exploit is most likely DoS (SLA hit) or model-serving disruption, not training-serving skew
+        { id: "C", label: "Accept risk — delay indefinitely", effect: (s) => {
+          s.futureEffects.push(
+            { triggerDay: s.day + 2, metric: "slaAdherence", delta: -18, message: "Unpatched CVE exploited — serving cluster disrupted, partial outage underway" },
+            { triggerDay: s.day + 3, metric: "slaAdherence", delta: -10, message: "Exploit persisted — SLA degradation compounding while patch is still undeployed" }
+          );
+        } },
       ],
     },
     {
@@ -862,8 +922,10 @@ export function getEventForDay(state: GameState): GameEvent | null {
       description: "Unexpected 3x spike in inference requests. Infrastructure is under stress.",
       choices: [
         { id: "A", label: "Auto-scale cluster", effect: (s) => { s.metrics.inferenceCost += 20; } },
-        { id: "B", label: "Rate limit requests", effect: (s) => { s.metrics.slaAdherence -= 10; } },
-        { id: "C", label: "Let it fail — shed load", effect: (s) => { s.metrics.slaAdherence -= 20; s.metrics.recall -= 5; } },
+        // Rate limiting a 3x spike means rejecting ~2/3 of requests — a far bigger SLA hit than -10
+        { id: "B", label: "Rate limit requests", effect: (s) => { s.metrics.slaAdherence -= 22; } },
+        // Uncontrolled failure is worse than rate limiting — but load-shedding affects throughput (SLA), not model recall
+        { id: "C", label: "Let it fail — shed load", effect: (s) => { s.metrics.slaAdherence -= 32; } },
       ],
     },
     {
@@ -884,15 +946,25 @@ export function getEventForDay(state: GameState): GameEvent | null {
       description: "Legal team requires model explainability report for a pending audit within 48 hours.",
       choices: [
         { id: "A", label: "Generate model explainability report", effect: (s) => { s.metrics.inferenceCost += 5; } },
-        { id: "B", label: "Use surrogate model for explanation", effect: (s) => { s.metrics.precision -= 3; } },
-        { id: "C", label: "Deny request — no bandwidth", effect: (s) => { s.metrics.slaAdherence -= 3; } },
+        // Surrogate models are for explanation only — they don't touch the serving path or affect live model precision
+        { id: "B", label: "Use surrogate model for explanation", effect: (s) => { s.metrics.inferenceCost += 3; } },
+        // Denying a legal audit request doesn't hurt serving SLA — it creates a delayed regulatory consequence
+        { id: "C", label: "Deny request — no bandwidth", effect: (s) => {
+          s.futureEffects.push({
+            triggerDay: s.day + 3,
+            metric: "slaAdherence",
+            delta: -20,
+            message: "Legal audit escalated to regulator — enforcement action forced emergency model review and partial shutdown",
+          });
+        } },
       ],
     },
   ];
 
-  // Vary by both day and scenario so identical days across different scenarios draw different events.
+  // Vary by day, scenario, and cumulative wins so each new playthrough draws a different event sequence.
   const scenarioHash = [...sc].reduce((acc, ch) => acc + ch.charCodeAt(0), 0);
-  return pool[(d * 7 + scenarioHash * 3) % pool.length];
+  const runSeed = (state.wins ?? 0) * 13;
+  return pool[(d * 7 + scenarioHash * 3 + runSeed) % pool.length];
 }
 
 // ---- Scenario Briefs ----
