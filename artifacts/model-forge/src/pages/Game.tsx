@@ -767,7 +767,7 @@ const CODEX_SCENARIO_DIFFICULTY = [
     signatureEvent: {
       day: 4,
       name: "DEMOGRAPHIC DISPARITY IN MODEL SCORES",
-      insight: "Disparate impact ratio 0.61 — the compliance team is escalating. Choice A (remove proxy features) costs Candidate Precision-8 but recovers Candidate Recall+3. Choice B (reweight training labels) costs only Precision-3 and recovers Recall+4 — the better balanced outcome. Choice C (suppress report) schedules −28 SLA on Day 7, almost certainly ending the run.",
+      insight: "Disparate impact ratio 0.61 — the compliance team is escalating. Choice A (remove proxy features) costs Candidate Precision−8 but recovers Candidate Recall+3. Choice B (reweight training labels) costs only Candidate Precision−3 and recovers Candidate Recall+4 — the better balanced outcome. Choice C (suppress report) schedules −28 SLA on Day 7, almost certainly ending the run.",
     },
     scoringTrap: "Choice A looks like the 'clean' technical fix — removing bias at the source — but the precision-8 cost on Day 4 often pushes an already-decaying model into the low_accuracy triggered event threshold (precision < 60%) before Day 6. Choice B is the correct answer for maintaining both metrics through the back half of the run.",
   },

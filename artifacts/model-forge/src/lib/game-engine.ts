@@ -1501,10 +1501,10 @@ export const SCENARIO_BRIEFS: Record<string, ScenarioBrief> = {
       "On Day 4, a compliance audit will flag disparate impact against a protected group. The correct fix is removing biased training features or reweighting labels — not switching model architectures. Suppressing the audit has severe delayed consequences.",
     lesson:
       "Training data encodes societal bias. Fairness requires auditing and correcting training labels and features — not just swapping model architectures. Simpler models can be equally biased.",
-    startingHandicap: "Output distribution skew starts at Medium — feature distributions already diverge across demographic groups in the training data.",
+    startingHandicap: "Training-serving skew starts at Medium — feature distributions already diverge across demographic groups in the inherited training data.",
     problemType: "classification",
-    metricLabels: { precision: "Precision", recall: "Recall" },
-    briefLabels: { precision: "PREC", recall: "REC" },
+    metricLabels: { precision: "Candidate Precision", recall: "Candidate Recall" },
+    briefLabels: { precision: "CAND", recall: "CREC" },
   },
   uber: {
     id: "uber",
