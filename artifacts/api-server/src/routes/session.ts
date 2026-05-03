@@ -1,7 +1,8 @@
 import { Router, type IRouter } from "express";
 import { randomUUID } from "crypto";
-import { eq, desc, isNotNull } from "drizzle-orm";
-import { db, sessionsTable } from "@workspace/db";
+import { eq, desc } from "drizzle-orm";
+import { db, sessionsTable, playersTable } from "@workspace/db";
+import bcrypt from "bcryptjs";
 import {
   NewSessionResponse,
   LoadStateQueryParams,
@@ -9,8 +10,10 @@ import {
   SaveStateBody,
   SaveStateResponse,
   GetLeaderboardResponse,
-  IdentifyPlayerBody,
-  IdentifyPlayerResponse,
+  RegisterPlayerBody,
+  RegisterPlayerResponse,
+  LoginPlayerBody,
+  LoginPlayerResponse,
 } from "@workspace/api-zod";
 
 const router: IRouter = Router();
@@ -57,6 +60,8 @@ const DEFAULT_STATE = {
   userLevel: "intern",
   wins: 0,
 };
+
+const BCRYPT_ROUNDS = 10;
 
 router.get("/new-session", (_req, res) => {
   const sessionId = randomUUID();
@@ -125,72 +130,79 @@ router.post("/save-state", async (req, res) => {
   }
 });
 
-router.post("/identify", async (req, res) => {
-  const body = IdentifyPlayerBody.parse(req.body);
-  const { username, sessionId } = body;
-
-  const normalised = username.trim().toLowerCase();
+router.post("/register", async (req, res) => {
+  const body = RegisterPlayerBody.parse(req.body);
+  const username = body.username.trim().toLowerCase();
+  const { password } = body;
 
   try {
-    // Look up existing record for this username
+    // Check if username is already taken
     const existing = await db
       .select()
-      .from(sessionsTable)
-      .where(eq(sessionsTable.username, normalised))
+      .from(playersTable)
+      .where(eq(playersTable.username, username))
       .limit(1);
 
     if (existing.length > 0) {
-      // Username already exists — returning player
-      const row = existing[0];
-      // If caller supplied a sessionId and it's different, the username is taken
-      if (sessionId && row.sessionId !== sessionId) {
-        // Return the existing session — the frontend will switch to it
-        const data = IdentifyPlayerResponse.parse({
-          sessionId: row.sessionId,
-          username: row.username ?? normalised,
-          isExistingPlayer: true,
-        });
-        res.json(data);
-        return;
-      }
-      const data = IdentifyPlayerResponse.parse({
-        sessionId: row.sessionId,
-        username: row.username ?? normalised,
-        isExistingPlayer: true,
-      });
-      res.json(data);
+      res.status(409).json({ error: "Username already taken. Choose a different name.", code: "USERNAME_TAKEN" });
       return;
     }
 
-    // New username — claim it on the given session (or create a fresh session)
-    const targetSessionId = sessionId ?? randomUUID();
+    const passwordHash = await bcrypt.hash(password, BCRYPT_ROUNDS);
+    const sessionId = randomUUID();
 
-    // Ensure the session row exists before we try to set the username
-    await db
-      .insert(sessionsTable)
-      .values({
-        sessionId: targetSessionId,
-        state: { ...DEFAULT_STATE, sessionId: targetSessionId },
-        scenario: "default",
-        day: 1,
-        status: "playing",
-        wins: 0,
-        username: normalised,
-      })
-      .onConflictDoUpdate({
-        target: sessionsTable.sessionId,
-        set: { username: normalised, updatedAt: new Date() },
-      });
+    // Create the player account
+    await db.insert(playersTable).values({ username, passwordHash, sessionId });
 
-    const data = IdentifyPlayerResponse.parse({
-      sessionId: targetSessionId,
-      username: normalised,
-      isExistingPlayer: false,
+    // Pre-create the session row with default state
+    await db.insert(sessionsTable).values({
+      sessionId,
+      state: { ...DEFAULT_STATE, sessionId },
+      scenario: "default",
+      day: 1,
+      status: "playing",
+      wins: 0,
     });
+
+    const data = RegisterPlayerResponse.parse({ sessionId, username, isNewPlayer: true });
     res.json(data);
   } catch (err) {
-    req.log.error({ err }, "Failed to identify player");
-    res.status(500).json({ error: "Failed to identify player", code: "SERVER_ERROR" });
+    req.log.error({ err }, "Failed to register player");
+    res.status(500).json({ error: "Registration failed. Please try again.", code: "SERVER_ERROR" });
+  }
+});
+
+router.post("/login", async (req, res) => {
+  const body = LoginPlayerBody.parse(req.body);
+  const username = body.username.trim().toLowerCase();
+  const { password } = body;
+
+  try {
+    const rows = await db
+      .select()
+      .from(playersTable)
+      .where(eq(playersTable.username, username))
+      .limit(1);
+
+    if (rows.length === 0) {
+      // Use a generic message to avoid leaking whether username exists
+      res.status(401).json({ error: "Invalid username or password.", code: "INVALID_CREDENTIALS" });
+      return;
+    }
+
+    const player = rows[0];
+    const passwordMatch = await bcrypt.compare(password, player.passwordHash);
+
+    if (!passwordMatch) {
+      res.status(401).json({ error: "Invalid username or password.", code: "INVALID_CREDENTIALS" });
+      return;
+    }
+
+    const data = LoginPlayerResponse.parse({ sessionId: player.sessionId, username: player.username, isNewPlayer: false });
+    res.json(data);
+  } catch (err) {
+    req.log.error({ err }, "Failed to login player");
+    res.status(500).json({ error: "Login failed. Please try again.", code: "SERVER_ERROR" });
   }
 });
 

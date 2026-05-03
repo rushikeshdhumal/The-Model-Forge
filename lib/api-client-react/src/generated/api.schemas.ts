@@ -145,23 +145,26 @@ export interface LeaderboardEntry {
   completedAt: string;
 }
 
-export interface IdentifyPlayerBody {
+export interface AuthBody {
   /**
    * @minLength 2
    * @maxLength 24
    */
   username: string;
-  /** Present when claiming a username for a new session. Absent when looking up an existing player. */
-  sessionId?: string | null;
+  /**
+   * @minLength 4
+   * @maxLength 72
+   */
+  password: string;
 }
 
-export interface IdentifyPlayerResponse {
+export interface AuthResponse {
   sessionId: string;
   username: string;
-  isExistingPlayer: boolean;
+  isNewPlayer: boolean;
 }
 
-export interface IdentifyPlayerError {
+export interface AuthError {
   error: string;
   code: string;
 }

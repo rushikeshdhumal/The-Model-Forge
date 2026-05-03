@@ -4,7 +4,8 @@ import {
   useLoadState,
   useSaveState,
   useGetLeaderboard,
-  useIdentifyPlayer,
+  useRegisterPlayer,
+  useLoginPlayer,
   getLoadStateQueryKey,
   getGetLeaderboardQueryKey,
 } from "@workspace/api-client-react";
@@ -429,9 +430,11 @@ export default function Game() {
   const [codeCopied, setCodeCopied] = useState(false);
   const [playerName, setPlayerName] = useState<string | null>(() => localStorage.getItem("modelForge_playerName"));
   const [showIdentity, setShowIdentity] = useState(false);
-  const [identifyInput, setIdentifyInput] = useState("");
-  const [identifyError, setIdentifyError] = useState("");
-  const [identifyMode, setIdentifyMode] = useState<"new" | "returning">("new");
+  const [authMode, setAuthMode] = useState<"register" | "login">("register");
+  const [authUsername, setAuthUsername] = useState("");
+  const [authPassword, setAuthPassword] = useState("");
+  const [authConfirm, setAuthConfirm] = useState("");
+  const [authError, setAuthError] = useState("");
   const logRef = useRef<HTMLDivElement>(null);
 
   // ---- Session bootstrap ----
@@ -455,7 +458,9 @@ export default function Game() {
   );
 
   const saveStateMutation = useSaveState();
-  const identifyMutation = useIdentifyPlayer();
+  const registerMutation = useRegisterPlayer();
+  const loginMutation = useLoginPlayer();
+  const authPending = registerMutation.isPending || loginMutation.isPending;
 
   const { data: leaderboardData } = useGetLeaderboard({
     query: { queryKey: getGetLeaderboardQueryKey() },
@@ -468,44 +473,63 @@ export default function Game() {
       if (loadData.isDefault && loaded.day === 1 && loaded.eventLog.length === 0) {
         setShowTutorial(true);
       } else if (!playerName) {
-        // Returning player without a name stored — prompt them
-        setIdentifyMode("returning");
+        setAuthMode("login");
+        setAuthUsername(""); setAuthPassword(""); setAuthConfirm(""); setAuthError("");
         setShowIdentity(true);
       }
-      // Compute event for current day
       const ev = getEventForDay(loaded);
       setCurrentEvent(ev);
       setEventResolved(false);
     }
   }, [loadData]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const handleIdentify = () => {
-    const name = identifyInput.trim().toLowerCase();
-    if (name.length < 2 || name.length > 24) {
-      setIdentifyError("Name must be 2–24 characters.");
-      return;
+  const validateAuthFields = (): string | null => {
+    const name = authUsername.trim().toLowerCase();
+    if (name.length < 2 || name.length > 24) return "Username must be 2–24 characters.";
+    if (!/^[a-z0-9_-]+$/.test(name)) return "Only letters, numbers, _ and - allowed in username.";
+    if (authPassword.length < 4) return "Password must be at least 4 characters.";
+    if (authMode === "register" && authPassword !== authConfirm) return "Passwords do not match.";
+    return null;
+  };
+
+  const handleAuthSuccess = (result: { sessionId: string; username: string }) => {
+    localStorage.setItem("modelForge_playerName", result.username);
+    localStorage.setItem("modelForge_sessionId", result.sessionId);
+    setPlayerName(result.username);
+    if (result.sessionId !== sessionId) {
+      window.location.reload();
+    } else {
+      setShowIdentity(false);
     }
-    if (!/^[a-z0-9_-]+$/.test(name)) {
-      setIdentifyError("Only letters, numbers, underscores, and hyphens allowed.");
-      return;
-    }
-    setIdentifyError("");
-    identifyMutation.mutate(
-      { data: { username: name, sessionId: sessionId ?? undefined } },
+  };
+
+  const handleRegister = () => {
+    const err = validateAuthFields();
+    if (err) { setAuthError(err); return; }
+    setAuthError("");
+    registerMutation.mutate(
+      { data: { username: authUsername.trim().toLowerCase(), password: authPassword } },
       {
-        onSuccess: (result) => {
-          localStorage.setItem("modelForge_playerName", result.username);
-          setPlayerName(result.username);
-          // If this is a returning player on a different session, switch to their session
-          if (result.isExistingPlayer && result.sessionId !== sessionId) {
-            localStorage.setItem("modelForge_sessionId", result.sessionId);
-            window.location.reload();
-            return;
-          }
-          setShowIdentity(false);
+        onSuccess: handleAuthSuccess,
+        onError: (e: unknown) => {
+          const msg = (e as { response?: { data?: { error?: string } } })?.response?.data?.error;
+          setAuthError(msg ?? "Registration failed. Please try again.");
         },
-        onError: () => {
-          setIdentifyError("Something went wrong. Please try again.");
+      }
+    );
+  };
+
+  const handleLogin = () => {
+    const name = authUsername.trim().toLowerCase();
+    if (!name || !authPassword) { setAuthError("Please enter your username and password."); return; }
+    setAuthError("");
+    loginMutation.mutate(
+      { data: { username: name, password: authPassword } },
+      {
+        onSuccess: handleAuthSuccess,
+        onError: (e: unknown) => {
+          const msg = (e as { response?: { data?: { error?: string } } })?.response?.data?.error;
+          setAuthError(msg ?? "Login failed. Please try again.");
         },
       }
     );
@@ -662,15 +686,15 @@ export default function Game() {
               <p className="text-xs text-muted-foreground tracking-widest">ML PRODUCTION SIMULATOR</p>
               {playerName ? (
                 <button
-                  onClick={() => { setIdentifyMode("new"); setIdentifyInput(""); setIdentifyError(""); setShowIdentity(true); }}
+                  onClick={() => { setAuthMode("login"); setAuthUsername(""); setAuthPassword(""); setAuthConfirm(""); setAuthError(""); setShowIdentity(true); }}
                   className="text-[10px] text-primary/70 border border-primary/25 px-1.5 py-0.5 tracking-widest hover:border-primary/50 hover:text-primary transition-colors"
-                  title="Switch player"
+                  title="Switch account"
                 >
                   {playerName.toUpperCase()}
                 </button>
               ) : (
                 <button
-                  onClick={() => { setIdentifyMode("returning"); setIdentifyInput(""); setIdentifyError(""); setShowIdentity(true); }}
+                  onClick={() => { setAuthMode("login"); setAuthUsername(""); setAuthPassword(""); setAuthConfirm(""); setAuthError(""); setShowIdentity(true); }}
                   className="text-[10px] text-muted-foreground/60 border border-border/30 px-1.5 py-0.5 tracking-widest hover:border-primary/40 hover:text-primary/70 transition-colors"
                 >
                   SIGN IN
@@ -1191,9 +1215,8 @@ export default function Game() {
               onClick={() => {
                 setShowTutorial(false);
                 if (!playerName) {
-                  setIdentifyMode("new");
-                  setIdentifyInput("");
-                  setIdentifyError("");
+                  setAuthMode("register");
+                  setAuthUsername(""); setAuthPassword(""); setAuthConfirm(""); setAuthError("");
                   setShowIdentity(true);
                 }
               }}
@@ -1295,53 +1318,94 @@ export default function Game() {
         </DialogContent>
       </Dialog>
 
-      {/* Player Identity dialog */}
+      {/* Player Auth dialog */}
       <Dialog open={showIdentity} onOpenChange={(open) => { if (!open && playerName) setShowIdentity(false); }}>
         <DialogContent className="bg-card border-primary/30 font-mono max-w-sm">
           <DialogHeader>
             <DialogTitle className="text-primary tracking-widest text-sm">
-              {identifyMode === "new" ? "IDENTIFY YOURSELF" : "WELCOME BACK"}
+              {authMode === "register" ? "CREATE ACCOUNT" : "SIGN IN"}
             </DialogTitle>
             <DialogDescription className="text-muted-foreground text-xs leading-relaxed">
-              {identifyMode === "new"
-                ? "Choose a player name. Your run is automatically saved under this name — type it again on any device to resume."
-                : "Enter your player name to automatically restore your saved progress."}
+              {authMode === "register"
+                ? "Choose a username and password. Your progress is saved automatically and locked to your credentials."
+                : "Enter your username and password to resume your saved run on any device."}
             </DialogDescription>
           </DialogHeader>
 
           <div className="space-y-3 pt-1">
+            {/* Tab toggle */}
+            <div className="flex border border-border/40">
+              {(["register", "login"] as const).map((mode) => (
+                <button
+                  key={mode}
+                  onClick={() => { setAuthMode(mode); setAuthError(""); }}
+                  className={`flex-1 text-[10px] tracking-widest py-1.5 transition-colors ${
+                    authMode === mode
+                      ? "bg-primary/10 text-primary border-primary/30"
+                      : "text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  {mode === "register" ? "NEW PLAYER" : "RETURNING PLAYER"}
+                </button>
+              ))}
+            </div>
+
+            {/* Username */}
             <div>
-              <div className="text-[10px] tracking-widest text-muted-foreground mb-1.5">PLAYER NAME</div>
+              <div className="text-[10px] tracking-widest text-muted-foreground mb-1">USERNAME</div>
               <input
                 type="text"
                 placeholder="e.g. dr_gradient"
-                value={identifyInput}
+                value={authUsername}
                 autoFocus
                 maxLength={24}
-                onChange={(e) => { setIdentifyInput(e.target.value); setIdentifyError(""); }}
-                onKeyDown={(e) => { if (e.key === "Enter") handleIdentify(); }}
+                onChange={(e) => { setAuthUsername(e.target.value); setAuthError(""); }}
+                onKeyDown={(e) => { if (e.key === "Enter") authMode === "register" ? handleRegister() : handleLogin(); }}
                 className="w-full bg-secondary/40 border border-border/40 px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground/50 outline-none focus:border-primary/50 tracking-wider"
               />
-              <p className="text-[10px] text-muted-foreground mt-1">Letters, numbers, underscores, hyphens. 2–24 chars.</p>
             </div>
 
-            {identifyError && (
-              <p className="text-[10px] text-destructive leading-relaxed">{identifyError}</p>
+            {/* Password */}
+            <div>
+              <div className="text-[10px] tracking-widest text-muted-foreground mb-1">PASSWORD</div>
+              <input
+                type="password"
+                placeholder="Min. 4 characters"
+                value={authPassword}
+                maxLength={72}
+                onChange={(e) => { setAuthPassword(e.target.value); setAuthError(""); }}
+                onKeyDown={(e) => { if (e.key === "Enter") authMode === "register" ? handleRegister() : handleLogin(); }}
+                className="w-full bg-secondary/40 border border-border/40 px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground/50 outline-none focus:border-primary/50"
+              />
+            </div>
+
+            {/* Confirm password (register only) */}
+            {authMode === "register" && (
+              <div>
+                <div className="text-[10px] tracking-widest text-muted-foreground mb-1">CONFIRM PASSWORD</div>
+                <input
+                  type="password"
+                  placeholder="Repeat password"
+                  value={authConfirm}
+                  maxLength={72}
+                  onChange={(e) => { setAuthConfirm(e.target.value); setAuthError(""); }}
+                  onKeyDown={(e) => { if (e.key === "Enter") handleRegister(); }}
+                  className="w-full bg-secondary/40 border border-border/40 px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground/50 outline-none focus:border-primary/50"
+                />
+              </div>
             )}
 
-            {identifyMode === "returning" && (
-              <p className="text-[10px] text-muted-foreground border-l-2 border-primary/30 pl-2 leading-relaxed">
-                If the name exists, your saved run loads automatically. If it's new, a fresh session starts under that name.
-              </p>
+            {authError && (
+              <p className="text-[10px] text-destructive leading-relaxed border-l-2 border-destructive/40 pl-2">{authError}</p>
             )}
 
             <div className="flex gap-2 pt-1">
               <Button
                 className="flex-1 font-bold tracking-widest"
-                disabled={identifyInput.trim().length < 2 || identifyMutation.isPending}
-                onClick={handleIdentify}
+                disabled={authPending}
+                onClick={authMode === "register" ? handleRegister : handleLogin}
               >
-                {identifyMutation.isPending ? "CONNECTING…" : identifyMode === "new" ? "BEGIN" : "RESTORE SAVE"}
+                {authPending ? "CONNECTING…" : authMode === "register" ? "CREATE ACCOUNT" : "SIGN IN"}
               </Button>
               {playerName && (
                 <Button
@@ -1354,14 +1418,10 @@ export default function Game() {
               )}
             </div>
 
-            {identifyMode === "new" && (
-              <button
-                onClick={() => { setIdentifyMode("returning"); setIdentifyInput(""); setIdentifyError(""); }}
-                className="text-[10px] text-muted-foreground hover:text-primary transition-colors w-full text-center"
-              >
-                Already have a saved game? Switch to restore mode →
-              </button>
-            )}
+            <p className="text-[9px] text-muted-foreground/60 text-center leading-relaxed">
+              Passwords are hashed and never stored in plain text.
+              Wrong password = no access to that account's save.
+            </p>
           </div>
         </DialogContent>
       </Dialog>

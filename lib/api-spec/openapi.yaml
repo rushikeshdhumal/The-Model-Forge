@@ -78,30 +78,55 @@ paths:
               schema:
                 $ref: "#/components/schemas/SaveStateResponse"
 
-  /identify:
+  /register:
     post:
-      operationId: identifyPlayer
+      operationId: registerPlayer
       tags: [session]
-      summary: Claim or look up a player identity linked to a session
+      summary: Register a new player account with username and password
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/IdentifyPlayerBody"
+              $ref: "#/components/schemas/AuthBody"
       responses:
         "200":
-          description: Session ID for this player
+          description: Account created and session returned
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/IdentifyPlayerResponse"
+                $ref: "#/components/schemas/AuthResponse"
         "409":
-          description: Username already taken by a different session
+          description: Username already taken
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/IdentifyPlayerError"
+                $ref: "#/components/schemas/AuthError"
+
+  /login:
+    post:
+      operationId: loginPlayer
+      tags: [session]
+      summary: Log in with username and password, returns the player's session
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AuthBody"
+      responses:
+        "200":
+          description: Login successful, session returned
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthResponse"
+        "401":
+          description: Wrong username or password
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthError"
 
   /leaderboard:
     get:
@@ -190,35 +215,36 @@ components:
         - slaAdherence
         - completedAt
 
-    IdentifyPlayerBody:
+    AuthBody:
       type: object
       properties:
         username:
           type: string
           minLength: 2
           maxLength: 24
-        sessionId:
+        password:
           type: string
-          nullable: true
-          description: Present when claiming a username for a new session. Absent when looking up an existing player.
+          minLength: 4
+          maxLength: 72
       required:
         - username
+        - password
 
-    IdentifyPlayerResponse:
+    AuthResponse:
       type: object
       properties:
         sessionId:
           type: string
         username:
           type: string
-        isExistingPlayer:
+        isNewPlayer:
           type: boolean
       required:
         - sessionId
         - username
-        - isExistingPlayer
+        - isNewPlayer
 
-    IdentifyPlayerError:
+    AuthError:
       type: object
       properties:
         error:

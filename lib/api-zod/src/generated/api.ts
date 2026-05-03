@@ -167,28 +167,55 @@ export const SaveStateResponse = zod.object({
 });
 
 /**
- * @summary Claim or look up a player identity linked to a session
+ * @summary Register a new player account with username and password
  */
-export const identifyPlayerBodyUsernameMin = 2;
-export const identifyPlayerBodyUsernameMax = 24;
+export const registerPlayerBodyUsernameMin = 2;
+export const registerPlayerBodyUsernameMax = 24;
 
-export const IdentifyPlayerBody = zod.object({
+export const registerPlayerBodyPasswordMin = 4;
+export const registerPlayerBodyPasswordMax = 72;
+
+export const RegisterPlayerBody = zod.object({
   username: zod
     .string()
-    .min(identifyPlayerBodyUsernameMin)
-    .max(identifyPlayerBodyUsernameMax),
-  sessionId: zod
+    .min(registerPlayerBodyUsernameMin)
+    .max(registerPlayerBodyUsernameMax),
+  password: zod
     .string()
-    .nullish()
-    .describe(
-      "Present when claiming a username for a new session. Absent when looking up an existing player.",
-    ),
+    .min(registerPlayerBodyPasswordMin)
+    .max(registerPlayerBodyPasswordMax),
 });
 
-export const IdentifyPlayerResponse = zod.object({
+export const RegisterPlayerResponse = zod.object({
   sessionId: zod.string(),
   username: zod.string(),
-  isExistingPlayer: zod.boolean(),
+  isNewPlayer: zod.boolean(),
+});
+
+/**
+ * @summary Log in with username and password, returns the player's session
+ */
+export const loginPlayerBodyUsernameMin = 2;
+export const loginPlayerBodyUsernameMax = 24;
+
+export const loginPlayerBodyPasswordMin = 4;
+export const loginPlayerBodyPasswordMax = 72;
+
+export const LoginPlayerBody = zod.object({
+  username: zod
+    .string()
+    .min(loginPlayerBodyUsernameMin)
+    .max(loginPlayerBodyUsernameMax),
+  password: zod
+    .string()
+    .min(loginPlayerBodyPasswordMin)
+    .max(loginPlayerBodyPasswordMax),
+});
+
+export const LoginPlayerResponse = zod.object({
+  sessionId: zod.string(),
+  username: zod.string(),
+  isNewPlayer: zod.boolean(),
 });
 
 /**

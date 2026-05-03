@@ -17,10 +17,10 @@ import type {
 } from "@tanstack/react-query";
 
 import type {
+  AuthBody,
+  AuthError,
+  AuthResponse,
   HealthStatus,
-  IdentifyPlayerBody,
-  IdentifyPlayerError,
-  IdentifyPlayerResponse,
   LeaderboardResponse,
   LoadStateParams,
   LoadStateResponse,
@@ -370,42 +370,42 @@ export const useSaveState = <
 };
 
 /**
- * @summary Claim or look up a player identity linked to a session
+ * @summary Register a new player account with username and password
  */
-export const getIdentifyPlayerUrl = () => {
-  return `/api/identify`;
+export const getRegisterPlayerUrl = () => {
+  return `/api/register`;
 };
 
-export const identifyPlayer = async (
-  identifyPlayerBody: IdentifyPlayerBody,
+export const registerPlayer = async (
+  authBody: AuthBody,
   options?: RequestInit,
-): Promise<IdentifyPlayerResponse> => {
-  return customFetch<IdentifyPlayerResponse>(getIdentifyPlayerUrl(), {
+): Promise<AuthResponse> => {
+  return customFetch<AuthResponse>(getRegisterPlayerUrl(), {
     ...options,
     method: "POST",
     headers: { "Content-Type": "application/json", ...options?.headers },
-    body: JSON.stringify(identifyPlayerBody),
+    body: JSON.stringify(authBody),
   });
 };
 
-export const getIdentifyPlayerMutationOptions = <
-  TError = ErrorType<IdentifyPlayerError>,
+export const getRegisterPlayerMutationOptions = <
+  TError = ErrorType<AuthError>,
   TContext = unknown,
 >(options?: {
   mutation?: UseMutationOptions<
-    Awaited<ReturnType<typeof identifyPlayer>>,
+    Awaited<ReturnType<typeof registerPlayer>>,
     TError,
-    { data: BodyType<IdentifyPlayerBody> },
+    { data: BodyType<AuthBody> },
     TContext
   >;
   request?: SecondParameter<typeof customFetch>;
 }): UseMutationOptions<
-  Awaited<ReturnType<typeof identifyPlayer>>,
+  Awaited<ReturnType<typeof registerPlayer>>,
   TError,
-  { data: BodyType<IdentifyPlayerBody> },
+  { data: BodyType<AuthBody> },
   TContext
 > => {
-  const mutationKey = ["identifyPlayer"];
+  const mutationKey = ["registerPlayer"];
   const { mutation: mutationOptions, request: requestOptions } = options
     ? options.mutation &&
       "mutationKey" in options.mutation &&
@@ -415,44 +415,130 @@ export const getIdentifyPlayerMutationOptions = <
     : { mutation: { mutationKey }, request: undefined };
 
   const mutationFn: MutationFunction<
-    Awaited<ReturnType<typeof identifyPlayer>>,
-    { data: BodyType<IdentifyPlayerBody> }
+    Awaited<ReturnType<typeof registerPlayer>>,
+    { data: BodyType<AuthBody> }
   > = (props) => {
     const { data } = props ?? {};
 
-    return identifyPlayer(data, requestOptions);
+    return registerPlayer(data, requestOptions);
   };
 
   return { mutationFn, ...mutationOptions };
 };
 
-export type IdentifyPlayerMutationResult = NonNullable<
-  Awaited<ReturnType<typeof identifyPlayer>>
+export type RegisterPlayerMutationResult = NonNullable<
+  Awaited<ReturnType<typeof registerPlayer>>
 >;
-export type IdentifyPlayerMutationBody = BodyType<IdentifyPlayerBody>;
-export type IdentifyPlayerMutationError = ErrorType<IdentifyPlayerError>;
+export type RegisterPlayerMutationBody = BodyType<AuthBody>;
+export type RegisterPlayerMutationError = ErrorType<AuthError>;
 
 /**
- * @summary Claim or look up a player identity linked to a session
+ * @summary Register a new player account with username and password
  */
-export const useIdentifyPlayer = <
-  TError = ErrorType<IdentifyPlayerError>,
+export const useRegisterPlayer = <
+  TError = ErrorType<AuthError>,
   TContext = unknown,
 >(options?: {
   mutation?: UseMutationOptions<
-    Awaited<ReturnType<typeof identifyPlayer>>,
+    Awaited<ReturnType<typeof registerPlayer>>,
     TError,
-    { data: BodyType<IdentifyPlayerBody> },
+    { data: BodyType<AuthBody> },
     TContext
   >;
   request?: SecondParameter<typeof customFetch>;
 }): UseMutationResult<
-  Awaited<ReturnType<typeof identifyPlayer>>,
+  Awaited<ReturnType<typeof registerPlayer>>,
   TError,
-  { data: BodyType<IdentifyPlayerBody> },
+  { data: BodyType<AuthBody> },
   TContext
 > => {
-  return useMutation(getIdentifyPlayerMutationOptions(options));
+  return useMutation(getRegisterPlayerMutationOptions(options));
+};
+
+/**
+ * @summary Log in with username and password, returns the player's session
+ */
+export const getLoginPlayerUrl = () => {
+  return `/api/login`;
+};
+
+export const loginPlayer = async (
+  authBody: AuthBody,
+  options?: RequestInit,
+): Promise<AuthResponse> => {
+  return customFetch<AuthResponse>(getLoginPlayerUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(authBody),
+  });
+};
+
+export const getLoginPlayerMutationOptions = <
+  TError = ErrorType<AuthError>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof loginPlayer>>,
+    TError,
+    { data: BodyType<AuthBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof loginPlayer>>,
+  TError,
+  { data: BodyType<AuthBody> },
+  TContext
+> => {
+  const mutationKey = ["loginPlayer"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof loginPlayer>>,
+    { data: BodyType<AuthBody> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return loginPlayer(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type LoginPlayerMutationResult = NonNullable<
+  Awaited<ReturnType<typeof loginPlayer>>
+>;
+export type LoginPlayerMutationBody = BodyType<AuthBody>;
+export type LoginPlayerMutationError = ErrorType<AuthError>;
+
+/**
+ * @summary Log in with username and password, returns the player's session
+ */
+export const useLoginPlayer = <
+  TError = ErrorType<AuthError>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof loginPlayer>>,
+    TError,
+    { data: BodyType<AuthBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof loginPlayer>>,
+  TError,
+  { data: BodyType<AuthBody> },
+  TContext
+> => {
+  return useMutation(getLoginPlayerMutationOptions(options));
 };
 
 /**
