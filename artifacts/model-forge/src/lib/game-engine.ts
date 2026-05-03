@@ -643,8 +643,15 @@ export function getEventForDay(state: GameState): GameEvent | null {
           id: "B",
           label: "Manual retrain with last 14 days of session and engagement data",
           effect: (s) => {
+            // Retraining on 14 days of lockdown-era engagement replaces the model's diverse
+            // historical collaborative-filtering signal with a concentrated lockdown signal.
+            // Lockdown binge behavior clusters around specific genres (immersive long-form, home content) —
+            // the model learns EXACTLY what users want right now, but narrows its view of their full
+            // taste profile. Engagement Rate (Precision@N) improves strongly; Diversity Score drops
+            // because the model now over-fits to the current narrow behavioral cluster, amplifying
+            // the filter bubble the Netflix scenario warns about.
             s.metrics.precision += 10;
-            s.metrics.recall += 8;
+            s.metrics.recall -= 4;
             s.registry.models.push({
               id: `model_v${s.day}`,
               type: "Neural Network",
@@ -663,9 +670,17 @@ export function getEventForDay(state: GameState): GameEvent | null {
           id: "C",
           label: "Drift is small — viewing behavior will normalize on its own",
           effect: (s) => {
+            // Ignoring drift compounds in two stages:
+            // 1. Engagement Rate drops as the model keeps recommending pre-lockdown content
+            //    (wrong session length, wrong genres for lockdown mood). Users disengage.
+            // 2. As users disengage, explicit engagement signals become sparse — collaborative
+            //    filtering loses signal fidelity. Taste clusters collapse and Diversity Score
+            //    falls as the model can no longer distinguish user preferences reliably.
+            //    The diversity collapse arrives later than the engagement drop.
             s.futureEffects.push(
-              { triggerDay: s.day + 2, metric: "precision", delta: -5, message: "Gradual drift degraded recommendation ranking quality" },
-              { triggerDay: s.day + 4, metric: "precision", delta: -5, message: "Severe drift — recommendations rated poor by 30%+ of users" }
+              { triggerDay: s.day + 2, metric: "precision", delta: -5, message: "Gradual drift degraded recommendation ranking quality — engagement declining" },
+              { triggerDay: s.day + 4, metric: "precision", delta: -5, message: "Severe drift — recommendations rated poor by 30%+ of users, engagement signals now sparse" },
+              { triggerDay: s.day + 4, metric: "recall", delta: -5, message: "Sparse engagement signals collapsed collaborative filtering — Diversity Score degraded as taste clusters lost definition" }
             );
           },
         },
@@ -1121,7 +1136,7 @@ export function getEventForDay(state: GameState): GameEvent | null {
       eventType: "random",
       title: "PREDICTION DISTRIBUTION SHIFT",
       description:
-        "Real-time monitoring shows the model's output distribution has shifted significantly week-over-week with no corresponding change in actual ground-truth rates. In classification this appears as a spike in positive prediction rate; in regression as systematic over- or under-prediction. Output predictions have drifted independently of input features.",
+        "Real-time monitoring shows the model's output distribution has shifted significantly week-over-week with no corresponding change in actual ground-truth rates. In classification this appears as a spike in positive prediction rate; in regression as systematic over- or under-prediction; in ranking as systematic shifts in which content types or items dominate recommendation slots. Output predictions have drifted independently of input features.",
       choices: [
         {
           id: "A",
@@ -1194,9 +1209,14 @@ export function getEventForDay(state: GameState): GameEvent | null {
           id: "C",
           label: "Fall back to rule-based heuristics for uncached requests",
           effect: (s) => {
-            // Rules are less accurate than the ML model — precision degrades; SLA only partially preserved
+            // Rule-based heuristics serve popular/trending content by popularity rank rather than
+            // personalized predictions. For classification: rules are more conservative, missing edge
+            // cases and reducing both precision and recall coverage. For ranking/recommendation:
+            // popular content is concentrated (same top titles for everyone) — the opposite of
+            // personalized diversity — so Diversity Score drops alongside Engagement Rate.
             s.metrics.slaAdherence -= 6;
             s.metrics.precision -= 4;
+            s.metrics.recall -= 3;
           },
         },
       ],
