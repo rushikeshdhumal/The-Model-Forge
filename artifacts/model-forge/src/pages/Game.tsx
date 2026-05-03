@@ -436,6 +436,7 @@ export default function Game() {
   const [authConfirm, setAuthConfirm] = useState("");
   const [authError, setAuthError] = useState("");
   const [showLeaderboard, setShowLeaderboard] = useState(false);
+  const [showScenarioPicker, setShowScenarioPicker] = useState(false);
   const [showLanding, setShowLanding] = useState(true);
   const [showGameOver, setShowGameOver] = useState(false);
   const [gameOverCopied, setGameOverCopied] = useState(false);
@@ -1663,18 +1664,101 @@ export default function Game() {
             <Button
               onClick={() => {
                 setShowTutorial(false);
-                if (!playerName) {
-                  setAuthMode("register");
-                  setAuthUsername(""); setAuthPassword(""); setAuthConfirm(""); setAuthError("");
-                  setShowIdentity(true);
-                }
+                setShowScenarioPicker(true);
               }}
               className="w-full font-bold tracking-widest"
               data-testid="button-start-game"
             >
-              ACKNOWLEDGE AND BEGIN
+              CHOOSE YOUR SCENARIO →
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Scenario Picker Modal */}
+      <Dialog open={showScenarioPicker} onOpenChange={setShowScenarioPicker}>
+        <DialogContent className="bg-card border-primary/30 font-mono max-w-5xl w-full max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="text-primary tracking-widest text-sm">SELECT YOUR SCENARIO</DialogTitle>
+            <DialogDescription className="text-muted-foreground text-xs leading-relaxed">
+              Each scenario is based on a real ML disaster. Pick one to inherit its conditions, or start clean on Default.
+              Harder scenarios begin with a metric handicap — but they also teach more.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 mt-3">
+            {([
+              { id: "default",   difficulty: 1, tag: "BEGINNER",  color: "text-primary border-primary/30"       },
+              { id: "zillow",    difficulty: 2, tag: "MODERATE",  color: "text-yellow-400 border-yellow-400/30" },
+              { id: "netflix",   difficulty: 2, tag: "MODERATE",  color: "text-yellow-400 border-yellow-400/30" },
+              { id: "tesla",     difficulty: 2, tag: "MODERATE",  color: "text-yellow-400 border-yellow-400/30" },
+              { id: "google",    difficulty: 2, tag: "MODERATE",  color: "text-yellow-400 border-yellow-400/30" },
+              { id: "uber",      difficulty: 3, tag: "HARD",      color: "text-destructive border-destructive/30" },
+              { id: "facebook",  difficulty: 3, tag: "HARD",      color: "text-destructive border-destructive/30" },
+              { id: "tay",       difficulty: 3, tag: "HARD",      color: "text-destructive border-destructive/30" },
+              { id: "stripe",    difficulty: 3, tag: "HARD",      color: "text-destructive border-destructive/30" },
+              { id: "amazon",    difficulty: 3, tag: "HARD",      color: "text-destructive border-destructive/30" },
+              { id: "twitter",   difficulty: 3, tag: "HARD",      color: "text-destructive border-destructive/30" },
+            ] as const).map(({ id, difficulty, tag, color }) => {
+              const brief = SCENARIO_BRIEFS[id];
+              if (!brief) return null;
+              const stars = "★".repeat(difficulty) + "☆".repeat(3 - difficulty);
+              return (
+                <button
+                  key={id}
+                  data-testid={`scenario-card-${id}`}
+                  onClick={() => {
+                    setShowScenarioPicker(false);
+                    // Apply scenario state
+                    const newState = buildScenarioState(id);
+                    persistState(newState);
+                    setCurrentEvent(getEventForDay(newState));
+                    setEventResolved(false);
+                    setHistoryView(null);
+                    // Show scenario brief, then auth if needed
+                    if (id !== "default") {
+                      setScenarioBrief(brief);
+                    } else if (!playerName) {
+                      setAuthMode("register");
+                      setAuthUsername(""); setAuthPassword(""); setAuthConfirm(""); setAuthError("");
+                      setShowIdentity(true);
+                    }
+                  }}
+                  className="group text-left border border-border/40 bg-card/20 hover:border-primary/40 hover:bg-primary/5 transition-all p-4 space-y-2.5 focus:outline-none focus:border-primary/60"
+                >
+                  {/* Header row */}
+                  <div className="flex items-start justify-between gap-2">
+                    <span className="text-[10px] tracking-widest text-muted-foreground border border-border/40 px-1.5 py-0.5 shrink-0">
+                      {brief.company.toUpperCase()} · {brief.year}
+                    </span>
+                    <span className={`text-[10px] tracking-widest border px-1.5 py-0.5 shrink-0 ${color}`}>
+                      {tag}
+                    </span>
+                  </div>
+
+                  {/* Title */}
+                  <div className="text-sm font-semibold text-foreground leading-snug group-hover:text-primary transition-colors">
+                    {brief.title}
+                  </div>
+
+                  {/* Tagline */}
+                  <div className="text-[11px] text-muted-foreground/70 italic leading-relaxed">
+                    &ldquo;{brief.tagline}&rdquo;
+                  </div>
+
+                  {/* Difficulty stars */}
+                  <div className={`text-sm tracking-widest ${color.split(" ")[0]}`}>{stars}</div>
+
+                  {/* Handicap */}
+                  {brief.startingHandicap && (
+                    <div className="border-l-2 border-destructive/40 pl-2 text-[10px] text-destructive/80 leading-relaxed">
+                      {brief.startingHandicap}
+                    </div>
+                  )}
+                </button>
+              );
+            })}
+          </div>
         </DialogContent>
       </Dialog>
 
