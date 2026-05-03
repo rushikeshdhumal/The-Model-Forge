@@ -209,10 +209,19 @@ router.post("/login", async (req, res) => {
 router.get("/leaderboard", async (req, res) => {
   try {
     const rows = await db
-      .select()
+      .select({
+        sessionId: sessionsTable.sessionId,
+        scenario: sessionsTable.scenario,
+        day: sessionsTable.day,
+        wins: sessionsTable.wins,
+        state: sessionsTable.state,
+        updatedAt: sessionsTable.updatedAt,
+        username: playersTable.username,
+      })
       .from(sessionsTable)
+      .leftJoin(playersTable, eq(sessionsTable.sessionId, playersTable.sessionId))
       .where(eq(sessionsTable.status, "won"))
-      .orderBy(desc(sessionsTable.day))
+      .orderBy(desc(sessionsTable.day), desc(sessionsTable.wins))
       .limit(10);
 
     const entries = rows.map((row) => {
@@ -221,8 +230,10 @@ router.get("/leaderboard", async (req, res) => {
       };
       return {
         sessionId: row.sessionId,
+        username: row.username ?? null,
         scenario: row.scenario,
         day: row.day,
+        wins: row.wins,
         precision: state?.metrics?.precision ?? 0,
         recall: state?.metrics?.recall ?? 0,
         slaAdherence: state?.metrics?.slaAdherence ?? 0,

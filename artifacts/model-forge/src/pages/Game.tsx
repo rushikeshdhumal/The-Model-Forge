@@ -435,6 +435,7 @@ export default function Game() {
   const [authPassword, setAuthPassword] = useState("");
   const [authConfirm, setAuthConfirm] = useState("");
   const [authError, setAuthError] = useState("");
+  const [showLeaderboard, setShowLeaderboard] = useState(false);
   const logRef = useRef<HTMLDivElement>(null);
 
   // ---- Session bootstrap ----
@@ -759,6 +760,15 @@ export default function Game() {
               data-testid="button-codex"
             >
               CODEX
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              className="text-primary/70 border-primary/30 hover:bg-primary/10 hover:text-primary text-xs"
+              onClick={() => setShowLeaderboard(true)}
+              data-testid="button-leaderboard"
+            >
+              SCORES
             </Button>
             <Button
               variant="outline"
@@ -1164,18 +1174,29 @@ export default function Game() {
             </CardContent>
           </Card>
 
-          {/* Leaderboard */}
+          {/* Leaderboard teaser */}
           {leaderboardData?.entries && leaderboardData.entries.length > 0 && (
             <Card className="border-border/60">
-              <CardHeader className="pb-3">
-                <CardTitle className="text-xs tracking-widest text-muted-foreground">TOP SURVIVORS</CardTitle>
+              <CardHeader className="pb-2">
+                <div className="flex justify-between items-center">
+                  <CardTitle className="text-xs tracking-widest text-muted-foreground">TOP SURVIVORS</CardTitle>
+                  <button
+                    onClick={() => setShowLeaderboard(true)}
+                    className="text-[10px] text-primary/60 hover:text-primary transition-colors tracking-widest"
+                  >
+                    VIEW ALL →
+                  </button>
+                </div>
               </CardHeader>
               <CardContent>
                 <div className="space-y-1.5 text-xs">
-                  {leaderboardData.entries.slice(0, 5).map((e, i) => (
-                    <div key={e.sessionId} className="flex justify-between items-center">
-                      <span className="text-muted-foreground">#{i + 1} {e.scenario}</span>
-                      <span className="text-primary">P:{e.precision.toFixed(0)}% R:{e.recall.toFixed(0)}%</span>
+                  {leaderboardData.entries.slice(0, 3).map((e, i) => (
+                    <div key={e.sessionId} className="flex justify-between items-center gap-2">
+                      <span className="text-muted-foreground shrink-0">#{i + 1}</span>
+                      <span className="text-foreground/80 truncate flex-1">
+                        {e.username ?? <span className="italic text-muted-foreground/60">anon</span>}
+                      </span>
+                      <span className="text-primary shrink-0">D{e.day} · P{e.precision.toFixed(0)}%</span>
                     </div>
                   ))}
                 </div>
@@ -1184,6 +1205,93 @@ export default function Game() {
           )}
         </div>
       </main>
+
+      {/* Tutorial Modal */}
+      {/* Leaderboard Modal */}
+      <Dialog open={showLeaderboard} onOpenChange={setShowLeaderboard}>
+        <DialogContent className="bg-card border-primary/30 font-mono max-w-2xl w-full">
+          <DialogHeader>
+            <DialogTitle className="text-primary tracking-widest text-sm">GLOBAL LEADERBOARD</DialogTitle>
+            <DialogDescription className="text-muted-foreground text-xs">
+              Top 10 completed runs ranked by days survived, then cumulative wins.
+              Sign in to claim your name on the board.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="mt-2">
+            {!leaderboardData?.entries || leaderboardData.entries.length === 0 ? (
+              <div className="text-center py-10 text-muted-foreground text-xs tracking-widest">
+                NO COMPLETED RUNS YET. BE THE FIRST TO SURVIVE ALL 14 DAYS.
+              </div>
+            ) : (
+              <div className="space-y-0">
+                {/* Header row */}
+                <div className="grid grid-cols-[2rem_1fr_5rem_4rem_4rem_4rem_4rem] gap-2 text-[10px] tracking-widest text-muted-foreground border-b border-border/40 pb-2 mb-1">
+                  <span>#</span>
+                  <span>PLAYER</span>
+                  <span>SCENARIO</span>
+                  <span className="text-right">DAY</span>
+                  <span className="text-right">WINS</span>
+                  <span className="text-right">PREC</span>
+                  <span className="text-right">RECALL</span>
+                </div>
+
+                {leaderboardData.entries.map((e, i) => {
+                  const isYou = playerName && e.username === playerName;
+                  const medal = i === 0 ? "🥇" : i === 1 ? "🥈" : i === 2 ? "🥉" : null;
+                  const completedDate = new Date(e.completedAt).toLocaleDateString(undefined, {
+                    month: "short", day: "numeric"
+                  });
+                  return (
+                    <div
+                      key={e.sessionId}
+                      className={`grid grid-cols-[2rem_1fr_5rem_4rem_4rem_4rem_4rem] gap-2 items-center py-2 text-xs border-b border-border/20 last:border-0 transition-colors ${
+                        isYou ? "bg-primary/5 text-primary" : "text-foreground/80 hover:bg-secondary/20"
+                      }`}
+                    >
+                      <span className="text-muted-foreground text-[11px]">
+                        {medal ?? `#${i + 1}`}
+                      </span>
+                      <div className="min-w-0">
+                        <div className={`truncate font-semibold ${isYou ? "text-primary" : "text-foreground"}`}>
+                          {e.username
+                            ? <>
+                                {e.username}
+                                {isYou && <span className="ml-1.5 text-[10px] text-primary/60">(you)</span>}
+                              </>
+                            : <span className="italic text-muted-foreground/50 text-[11px]">anonymous</span>
+                          }
+                        </div>
+                        <div className="text-[10px] text-muted-foreground/50">{completedDate}</div>
+                      </div>
+                      <span className="text-[10px] text-muted-foreground capitalize truncate">{e.scenario}</span>
+                      <span className={`text-right font-bold ${e.day >= 14 ? "text-primary" : "text-foreground/60"}`}>
+                        {e.day}/14
+                      </span>
+                      <span className="text-right text-muted-foreground">{e.wins}</span>
+                      <span className="text-right">{e.precision.toFixed(1)}%</span>
+                      <span className="text-right">{e.recall.toFixed(1)}%</span>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
+            {!playerName && (
+              <div className="mt-4 border border-primary/20 bg-primary/5 px-4 py-3 text-xs text-muted-foreground leading-relaxed">
+                <span className="text-primary font-semibold">Want your name on the board?</span>{" "}
+                Create an account — your wins are tracked per player.{" "}
+                <button
+                  onClick={() => { setShowLeaderboard(false); setAuthMode("register"); setAuthUsername(""); setAuthPassword(""); setAuthConfirm(""); setAuthError(""); setShowIdentity(true); }}
+                  className="text-primary hover:underline ml-1"
+                >
+                  Sign up →
+                </button>
+              </div>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* Tutorial Modal */}
       <Dialog open={showTutorial} onOpenChange={setShowTutorial}>

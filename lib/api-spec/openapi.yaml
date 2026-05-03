@@ -194,9 +194,14 @@ components:
       properties:
         sessionId:
           type: string
+        username:
+          type: string
+          nullable: true
         scenario:
           type: string
         day:
+          type: integer
+        wins:
           type: integer
         precision:
           type: number
@@ -210,6 +215,7 @@ components:
         - sessionId
         - scenario
         - day
+        - wins
         - precision
         - recall
         - slaAdherence

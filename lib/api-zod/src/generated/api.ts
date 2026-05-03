@@ -225,8 +225,10 @@ export const GetLeaderboardResponse = zod.object({
   entries: zod.array(
     zod.object({
       sessionId: zod.string(),
+      username: zod.string().nullish(),
       scenario: zod.string(),
       day: zod.number(),
+      wins: zod.number(),
       precision: zod.number(),
       recall: zod.number(),
       slaAdherence: zod.number(),
