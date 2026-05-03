@@ -196,7 +196,7 @@ function getCodexMetrics(scenario: string) {
       ],
     },
     zillow: {
-      definition: "What percentage of home price estimates fall within ±5% of the final sale price? Coverage Index measures estimate accuracy at scale.",
+      definition: "What percentage of home price estimates fall within ±5% of the final sale price? Accuracy Index measures the model's pricing precision at scale.",
       formula: "Properties with |estimate − sale_price| < 5% / Total listed",
       whyItMatters: "Buyers anchor on the Zestimate. Estimates off by >5% systematically distort offers — sellers are underpaid, buyers overbid. Zillow's 2021 iBuying collapse lost $500M directly because this degraded while the model bought homes at scale.",
       causes: [
@@ -247,9 +247,9 @@ function getCodexMetrics(scenario: string) {
       ],
     },
     google: {
-      definition: "Of the top-K search results returned, what fraction are rated relevant by independent quality evaluators? Relevance Score is Precision@K.",
-      formula: "Relevant results in top-K / K (Precision@K)",
-      whyItMatters: "A single irrelevant result at position 1 causes 5–10% query reformulation. Historically, a sustained Precision drop at P1 correlates with users switching to Bing for vertical queries. Relevance is Google's core product promise.",
+      definition: "Normalized Discounted Cumulative Gain: a position-weighted ranking quality metric. Relevant results near the top contribute more than equally relevant results lower down — the log discount means position 1 counts roughly 3× more than position 10.",
+      formula: "DCG = Σ (relevanceᵢ / log₂(i + 1)); NDCG = DCG / IDCG (ideal DCG for perfect ranking)",
+      whyItMatters: "A drop in NDCG means relevant results are either missing or buried below irrelevant ones. Position 1 matters disproportionately — a perfect result at rank 1 outweighs the same result at rank 10 by a factor of ~3.3. Google's human-rater programme (Search Quality Evaluator Guidelines) is built entirely around NDCG measurement.",
       causes: [
         "LLM-generated content flooding the index and confusing quality signals",
         "SEO manipulation exploiting ranking signals not caught by spam filters",
@@ -315,20 +315,20 @@ function getCodexMetrics(scenario: string) {
       ],
     },
     amazon: {
-      definition: "Of all transactions your model flags as fraudulent, what fraction are genuinely fraudulent? False positives block legitimate purchases.",
+      definition: "Of all résumés your model scores as 'qualified', what fraction are genuinely strong candidates? False positives waste recruiter time on weak applications.",
       formula: "True Positives / (True Positives + False Positives)",
-      whyItMatters: "At Amazon's transaction volume, a 1% precision drop is millions of wrongly-blocked purchases. False positives frustrate customers at checkout, drive chargebacks to live support, and erode trust in Amazon Pay for international transactions.",
+      whyItMatters: "Amazon's hiring tool penalized résumés containing 'women's' and downgraded all-women's college graduates. Precision failures in hiring AI mean recruiters waste time on biased scores — and systematically favour candidates from historically overrepresented groups, encoding historical discrimination at industrial scale.",
       causes: [
-        "Concept drift — new legitimate payment patterns being misclassified as fraud",
-        "Geographic expansion without fraud models trained on local behavior",
-        "Data poisoning introducing false positives into the fraud training labels",
-        "Feature staleness — risk signals based on stale device or session fingerprints",
+        "Training on biased historical hiring decisions that reflect demographic imbalance in tech",
+        "Proxy features (university prestige, job title phrasing) carrying demographic signal",
+        "Label noise — past hiring decisions made by humans with their own biases become training targets",
+        "Concept drift as the definition of 'strong candidate' evolves faster than the model retrains",
       ],
       recovery: [
-        "Retrain with recent transaction data weighted toward new legitimate patterns",
-        "Adjust the fraud classification threshold upward to reduce false positives",
-        "Add geographic context features to distinguish regional legitimate patterns",
-        "Enable CI/CD to retrain weekly — fraud patterns evolve rapidly",
+        "Audit and remove proxy features that correlate with protected characteristics",
+        "Reweight training labels to correct for historical demographic imbalance",
+        "Add a fairness constraint requiring balanced precision across demographic groups",
+        "Require disparate impact analysis on every model version before deployment",
       ],
     },
     stripe: {
@@ -386,7 +386,7 @@ function getCodexMetrics(scenario: string) {
       ],
     },
     zillow: {
-      definition: "What fraction of listed properties receive any estimate at all? Coverage Rate measures how broadly the model can be applied across the full inventory.",
+      definition: "What fraction of listed properties receive any estimate at all? Coverage Index measures how broadly the model can be applied across the full inventory.",
       formula: "Properties with estimates / Total listed properties",
       whyItMatters: "Low coverage means the model only prices well-represented homes and abandons the rest to expensive human appraisal. It also biases the market — homes without Zestimates sell slower and at lower prices, creating systemic inequity in who benefits from algorithmic pricing.",
       causes: [
@@ -437,9 +437,9 @@ function getCodexMetrics(scenario: string) {
       ],
     },
     google: {
-      definition: "Of all genuinely relevant documents in the index for a query, what fraction make it into the top-K results? Coverage Index measures how completely the search serves each query's information space.",
-      formula: "Relevant retrieved in top-K / All relevant in corpus (Recall@K)",
-      whyItMatters: "Low recall means niche and expert queries return incomplete results — the gaps competitors fill. It also drives dependency on Bing, DuckDuckGo, or vertical-specific tools for queries your index doesn't fully cover. At Google scale, a 1% recall drop on the long tail is billions of underserved queries.",
+      definition: "Mean Average Precision — the mean of Average Precision scores computed across all queries. For each query, AP averages Precision@K at every rank position where a relevant document appears. MAP rewards models that not only find relevant documents but surface them early and find all of them.",
+      formula: "MAP = (1/|Q|) × Σ_q AP(q); AP(q) = Σ_k (P@k × rel_k) / |relevant_q|",
+      whyItMatters: "Low MAP means niche and expert queries return incomplete, poorly-ordered results — the gaps competitors fill. MAP captures both ordering quality and completeness: a model that finds all relevant documents but buries them scores lower than one that surfaces them early. At Google scale, a 1% MAP drop on the long tail is billions of underserved queries.",
       causes: [
         "Index freshness issues — newly published relevant content not yet crawled",
         "Ranking bias toward high-PageRank domains over genuinely relevant smaller sources",
@@ -505,20 +505,20 @@ function getCodexMetrics(scenario: string) {
       ],
     },
     amazon: {
-      definition: "Of all genuinely fraudulent transactions, what fraction does your model catch before the transaction completes and the money moves?",
+      definition: "Of all genuinely strong candidates in the applicant pool, what fraction does your model successfully surface for recruiter review? Missed candidates represent lost hiring potential.",
       formula: "True Positives / (True Positives + False Negatives)",
-      whyItMatters: "Each missed fraud is a real loss — absorbed by Amazon or disputed back via chargeback. At Amazon's scale, a single percentage point in recall is worth hundreds of millions annually in fraud absorption. More importantly, uncaught fraud funds further attacks, creating compounding exposure.",
+      whyItMatters: "When the hiring model systematically misses candidates from certain demographic groups, it is not just an accuracy failure — it is illegal disparate impact under EEOC's 80% rule. Amazon's tool violated this by consistently scoring women lower than equivalent male candidates, meaning qualified women were systematically screened out before any human reviewed them.",
       causes: [
-        "Novel fraud patterns not present in training data",
-        "Data imbalance — fraud is rare, so the model under-learns the minority class",
-        "Feature staleness — fraud velocity signals based on stale transaction windows",
-        "Concept drift as fraud rings adapt their techniques to evade the current model",
+        "Model learns that historically underrepresented groups rarely appear in 'hired' training labels",
+        "Data imbalance — underrepresented candidates are a minority in historical positives",
+        "Feature correlation with demographic proxies causing systematic miss rates by group",
+        "Feedback loop: missing diverse candidates → biased hiring → more biased training data next cycle",
       ],
       recovery: [
-        "Retrain with oversampled fraud examples and synthetic fraud augmentation",
-        "Lower the fraud detection threshold — at Amazon's scale, false positives are manageable",
-        "Add real-time velocity features: transactions per device per minute, IP reputation",
-        "Enable CI/CD weekly retraining — fraud patterns evolve in direct response to your model",
+        "Compute recall separately by demographic group to surface disparate miss rates",
+        "Retrain with oversampled examples from historically underrepresented groups",
+        "Use adversarial debiasing to enforce equal recall across protected groups",
+        "Require a disparate impact ratio report on every model update before deployment",
       ],
     },
     stripe: {

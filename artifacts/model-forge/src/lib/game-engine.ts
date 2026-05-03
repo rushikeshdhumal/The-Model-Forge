@@ -73,7 +73,7 @@ function advanceDay(s: GameState): GameState {
     s.metrics.precision <= 0 ||
     s.metrics.recall <= 0 ||
     s.metrics.slaAdherence <= 0 ||
-    s.metrics.featureStaleness > 48 ||
+    s.metrics.featureStaleness > 36 ||
     s.metrics.inferenceCost >= 100
   ) {
     s.status = "lost";
@@ -284,7 +284,7 @@ export function getEventForDay(state: GameState): GameEvent | null {
               triggerDay: s.day + 3,
               metric: "precision",
               delta: -8,
-              message: "Fraud rings adapted to the raised threshold — precision eroded as false negatives accumulated",
+              message: "Fraud rings studied the new threshold and adapted — sophisticated near-threshold transactions inflated the false alarm rate, eroding precision",
             });
           },
         },
@@ -956,10 +956,10 @@ export const SCENARIO_BRIEFS: Record<string, ScenarioBrief> = {
       "On Day 5, gradual concept drift will surface as viewer behavior shifts. Ignoring it schedules two future ranking quality drops. Enabling auto-retraining is the fastest mitigation.",
     lesson:
       "Concept drift is the default state of any model serving a changing world. Continuous training pipelines are infrastructure, not a nice-to-have.",
-    startingHandicap: "Ranking quality (NDCG index) starts at 78% — the model is already slightly behind the current user behavior distribution.",
+    startingHandicap: "Engagement Rate starts at 78% — the model is already slightly behind the current user behavior distribution.",
     problemType: "ranking",
-    metricLabels: { precision: "NDCG Index", recall: "MAP Index" },
-    briefLabels: { precision: "NDCG", recall: "MAP" },
+    metricLabels: { precision: "Engagement Rate", recall: "Diversity Score" },
+    briefLabels: { precision: "ENGS", recall: "DIVS" },
   },
   tesla: {
     id: "tesla",
@@ -1149,20 +1149,20 @@ export function generateDailyBrief(state: GameState): DailyBriefData | null {
   const minAccuracy = Math.min(m.precision, m.recall);
   const daysLeft = 14 - state.day + 1;
 
-  if (m.precision <= 20 || m.recall <= 20 || m.slaAdherence <= 20 || m.featureStaleness > 40) {
+  if (m.precision <= 20 || m.recall <= 20 || m.slaAdherence <= 20 || m.featureStaleness > 30) {
     severity = "critical";
     if (m.precision <= m.recall && m.precision <= m.slaAdherence) {
       diagnosis = `CRITICAL: ${labels.precision} at ${m.precision.toFixed(0)}% — ${daysLeft} days to survive. Emergency retrain or rollback needed immediately.`;
     } else if (m.recall <= m.slaAdherence) {
       diagnosis = `CRITICAL: ${labels.recall} collapsed to ${m.recall.toFixed(0)}%. Model is missing most positive cases. Rollback strongly advised.`;
     } else if (m.featureStaleness > 40) {
-      diagnosis = `CRITICAL: Feature staleness at ${m.featureStaleness.toFixed(0)}h — 8h from loss threshold. Enable Feature Store now.`;
+      diagnosis = `CRITICAL: Feature staleness at ${m.featureStaleness.toFixed(0)}h — 6h from loss threshold. Enable Feature Store now.`;
     } else {
       diagnosis = `CRITICAL: SLA adherence at ${m.slaAdherence.toFixed(0)}%. Infrastructure is near collapse — scale or roll back immediately.`;
     }
   } else if (m.featureStaleness > 24) {
     severity = "warning";
-    diagnosis = `WARNING: Feature staleness at ${m.featureStaleness.toFixed(0)}h (threshold: 48h). Enable Feature Store or force refresh this turn.`;
+    diagnosis = `WARNING: Feature staleness at ${m.featureStaleness.toFixed(0)}h (threshold: 36h). Enable Feature Store or force refresh this turn.`;
   } else if (minAccuracy < 50) {
     severity = "warning";
     diagnosis = `WARNING: Model quality degrading (${labels.precision} ${m.precision.toFixed(0)}%, ${labels.recall} ${m.recall.toFixed(0)}%). Consider retraining or promoting a staged candidate.`;
@@ -1214,7 +1214,7 @@ export function generatePostMortem(state: GameState): string[] {
     bullets.push("SLA adherence hit zero — a complete production outage. Infrastructure scaling or rollback was critical.");
   }
   if (state.metrics.featureStaleness > 36) {
-    bullets.push("Feature staleness exceeded 48 hours — the model was operating on data nearly 2 days out of date.");
+    bullets.push("Feature staleness exceeded 36 hours — features were stale enough to make training-serving skew catastrophic.");
   }
   if (state.metrics.inferenceCost >= 100) {
     bullets.push("Inference cost hit the limit — unchecked scaling without optimization bankrupted the budget.");
