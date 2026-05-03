@@ -3,6 +3,7 @@ import { randomUUID } from "crypto";
 import { eq, desc } from "drizzle-orm";
 import { db, sessionsTable, playersTable } from "@workspace/db";
 import bcrypt from "bcryptjs";
+import rateLimit from "express-rate-limit";
 import {
   NewSessionResponse,
   LoadStateQueryParams,
@@ -17,6 +18,21 @@ import {
 } from "@workspace/api-zod";
 
 const router: IRouter = Router();
+
+// 10 attempts per IP per 15 minutes on auth endpoints
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  skipSuccessfulRequests: true, // only failed/all attempts count toward limit
+  handler: (_req, res) => {
+    res.status(429).json({
+      error: "Too many attempts. Please wait 15 minutes and try again.",
+      code: "RATE_LIMITED",
+    });
+  },
+});
 
 const DEFAULT_STATE = {
   sessionId: "",
@@ -132,7 +148,7 @@ router.post("/save-state", async (req, res) => {
 
 const USERNAME_PATTERN = /^[a-z0-9_-]+$/;
 
-router.post("/register", async (req, res) => {
+router.post("/register", authLimiter, async (req, res) => {
   const body = RegisterPlayerBody.parse(req.body);
   const username = body.username.trim().toLowerCase();
   const { password } = body;
@@ -179,7 +195,7 @@ router.post("/register", async (req, res) => {
   }
 });
 
-router.post("/login", async (req, res) => {
+router.post("/login", authLimiter, async (req, res) => {
   const body = LoginPlayerBody.parse(req.body);
   const username = body.username.trim().toLowerCase();
   const { password } = body;
