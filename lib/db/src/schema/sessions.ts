@@ -6,6 +6,7 @@ export const playersTable = pgTable("players", {
   username: text("username").primaryKey(),
   passwordHash: text("password_hash").notNull(),
   sessionId: text("session_id").notNull(),
+  recoveryHash: text("recovery_hash"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 

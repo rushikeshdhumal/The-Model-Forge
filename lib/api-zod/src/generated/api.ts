@@ -227,6 +227,37 @@ export const LoginPlayerResponse = zod.object({
 });
 
 /**
+ * @summary Generate a one-time recovery code for a registered player (requires current password)
+ */
+export const GenerateRecoveryBody = zod.object({
+  username: zod.string(),
+  password: zod.string(),
+});
+
+export const GenerateRecoveryResponse = zod.object({
+  recoveryCode: zod.string(),
+});
+
+/**
+ * @summary Reset password using a one-time recovery code
+ */
+export const resetPasswordBodyNewPasswordMin = 4;
+export const resetPasswordBodyNewPasswordMax = 72;
+
+export const ResetPasswordBody = zod.object({
+  username: zod.string(),
+  recoveryCode: zod.string(),
+  newPassword: zod
+    .string()
+    .min(resetPasswordBodyNewPasswordMin)
+    .max(resetPasswordBodyNewPasswordMax),
+});
+
+export const ResetPasswordResponse = zod.object({
+  success: zod.boolean(),
+});
+
+/**
  * @summary Check whether a username is registered
  */
 export const CheckUsernameQueryParams = zod.object({

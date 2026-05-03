@@ -154,6 +154,29 @@ export interface LeaderboardEntry {
   maxStreak: number;
 }
 
+export interface GenerateRecoveryBody {
+  username: string;
+  password: string;
+}
+
+export interface GenerateRecoveryResponse {
+  recoveryCode: string;
+}
+
+export interface ResetPasswordBody {
+  username: string;
+  recoveryCode: string;
+  /**
+   * @minLength 4
+   * @maxLength 72
+   */
+  newPassword: string;
+}
+
+export interface ResetPasswordResponse {
+  success: boolean;
+}
+
 export interface CheckUsernameResponse {
   exists: boolean;
   day?: number | null;

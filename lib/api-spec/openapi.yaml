@@ -128,6 +128,56 @@ paths:
               schema:
                 $ref: "#/components/schemas/AuthError"
 
+  /generate-recovery:
+    post:
+      operationId: generateRecovery
+      tags: [session]
+      summary: Generate a one-time recovery code for a registered player (requires current password)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/GenerateRecoveryBody"
+      responses:
+        "200":
+          description: Recovery code generated (shown once, never retrievable again)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GenerateRecoveryResponse"
+        "401":
+          description: Wrong username or password
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthError"
+
+  /reset-password:
+    post:
+      operationId: resetPassword
+      tags: [session]
+      summary: Reset password using a one-time recovery code
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ResetPasswordBody"
+      responses:
+        "200":
+          description: Password reset successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ResetPasswordResponse"
+        "401":
+          description: Invalid or already-used recovery code
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthError"
+
   /check-username:
     get:
       operationId: checkUsername
@@ -248,6 +298,49 @@ components:
         - score
         - grade
         - maxStreak
+
+    GenerateRecoveryBody:
+      type: object
+      properties:
+        username:
+          type: string
+        password:
+          type: string
+      required:
+        - username
+        - password
+
+    GenerateRecoveryResponse:
+      type: object
+      properties:
+        recoveryCode:
+          type: string
+      required:
+        - recoveryCode
+
+    ResetPasswordBody:
+      type: object
+      properties:
+        username:
+          type: string
+        recoveryCode:
+          type: string
+        newPassword:
+          type: string
+          minLength: 4
+          maxLength: 72
+      required:
+        - username
+        - recoveryCode
+        - newPassword
+
+    ResetPasswordResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+      required:
+        - success
 
     CheckUsernameResponse:
       type: object

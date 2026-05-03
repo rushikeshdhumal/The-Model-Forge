@@ -16,6 +16,10 @@ import {
   LoginPlayerBody,
   LoginPlayerResponse,
   CheckUsernameResponse,
+  GenerateRecoveryBody,
+  GenerateRecoveryResponse,
+  ResetPasswordBody,
+  ResetPasswordResponse,
 } from "@workspace/api-zod";
 
 const router: IRouter = Router();
@@ -144,6 +148,75 @@ router.post("/save-state", async (req, res) => {
   } catch (err) {
     req.log.error({ err }, "Failed to save state");
     res.status(500).json({ error: "Failed to save state" });
+  }
+});
+
+// Helper to generate a human-readable recovery code: FORGE-XXXX-XXXX-XXXX
+function generateRecoveryCode(): string {
+  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; // no 0/O/1/I confusion
+  const seg = () => Array.from({ length: 4 }, () => chars[Math.floor(Math.random() * chars.length)]).join("");
+  return `FORGE-${seg()}-${seg()}-${seg()}`;
+}
+
+router.post("/generate-recovery", authLimiter, async (req, res) => {
+  const body = GenerateRecoveryBody.parse(req.body);
+  const username = body.username.trim().toLowerCase();
+  const { password } = body;
+
+  try {
+    const rows = await db.select().from(playersTable).where(eq(playersTable.username, username)).limit(1);
+    if (rows.length === 0) {
+      res.status(401).json({ error: "Invalid username or password.", code: "INVALID_CREDENTIALS" });
+      return;
+    }
+    const player = rows[0];
+    const passwordMatch = await bcrypt.compare(password, player.passwordHash);
+    if (!passwordMatch) {
+      res.status(401).json({ error: "Invalid username or password.", code: "INVALID_CREDENTIALS" });
+      return;
+    }
+
+    const recoveryCode = generateRecoveryCode();
+    const recoveryHash = await bcrypt.hash(recoveryCode, BCRYPT_ROUNDS);
+    await db.update(playersTable).set({ recoveryHash }).where(eq(playersTable.username, username));
+
+    const data = GenerateRecoveryResponse.parse({ recoveryCode });
+    res.json(data);
+  } catch (err) {
+    req.log.error({ err }, "Failed to generate recovery code");
+    res.status(500).json({ error: "Failed to generate recovery code. Please try again.", code: "SERVER_ERROR" });
+  }
+});
+
+router.post("/reset-password", authLimiter, async (req, res) => {
+  const body = ResetPasswordBody.parse(req.body);
+  const username = body.username.trim().toLowerCase();
+  const { recoveryCode, newPassword } = body;
+
+  try {
+    const rows = await db.select().from(playersTable).where(eq(playersTable.username, username)).limit(1);
+    if (rows.length === 0 || !rows[0].recoveryHash) {
+      res.status(401).json({ error: "Invalid username or recovery code.", code: "INVALID_CREDENTIALS" });
+      return;
+    }
+    const player = rows[0];
+    const codeMatch = await bcrypt.compare(recoveryCode.trim().toUpperCase(), player.recoveryHash!);
+    if (!codeMatch) {
+      res.status(401).json({ error: "Invalid username or recovery code.", code: "INVALID_CREDENTIALS" });
+      return;
+    }
+
+    const newPasswordHash = await bcrypt.hash(newPassword, BCRYPT_ROUNDS);
+    // Clear the recovery hash so the code can only be used once
+    await db.update(playersTable)
+      .set({ passwordHash: newPasswordHash, recoveryHash: null })
+      .where(eq(playersTable.username, username));
+
+    const data = ResetPasswordResponse.parse({ success: true });
+    res.json(data);
+  } catch (err) {
+    req.log.error({ err }, "Failed to reset password");
+    res.status(500).json({ error: "Failed to reset password. Please try again.", code: "SERVER_ERROR" });
   }
 });
 

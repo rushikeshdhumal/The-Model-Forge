@@ -8,6 +8,8 @@ import {
   useRegisterPlayer,
   useLoginPlayer,
   useCheckUsername,
+  useGenerateRecovery,
+  useResetPassword,
   getLoadStateQueryKey,
   getGetLeaderboardQueryKey,
 } from "@workspace/api-client-react";
@@ -1055,6 +1057,17 @@ export default function Game() {
   const [showLookup, setShowLookup] = useState(false);
   const [lookupInput, setLookupInput] = useState("");
   const [lookupQuery, setLookupQuery] = useState("");
+  const [showForgotPw, setShowForgotPw] = useState(false);
+  const [forgotCode, setForgotCode] = useState("");
+  const [forgotNewPw, setForgotNewPw] = useState("");
+  const [forgotNewConfirm, setForgotNewConfirm] = useState("");
+  const [forgotError, setForgotError] = useState("");
+  const [forgotSuccess, setForgotSuccess] = useState(false);
+  const [showGenRecovery, setShowGenRecovery] = useState(false);
+  const [genRecoveryPassword, setGenRecoveryPassword] = useState("");
+  const [generatedCode, setGeneratedCode] = useState("");
+  const [genRecoveryError, setGenRecoveryError] = useState("");
+  const [genCodeCopied, setGenCodeCopied] = useState(false);
   const [showLeaderboard, setShowLeaderboard] = useState(false);
   const [showScenarioPicker, setShowScenarioPicker] = useState(false);
   const [showLanding, setShowLanding] = useState(() => {
@@ -1107,6 +1120,36 @@ export default function Game() {
     { username: lookupQuery },
     { query: { enabled: !!lookupQuery, queryKey: ["/api/check-username", lookupQuery] } }
   );
+  const generateRecoveryMutation = useGenerateRecovery();
+  const resetPasswordMutation = useResetPassword();
+
+  const resetForgotState = () => {
+    setShowForgotPw(false);
+    setForgotCode(""); setForgotNewPw(""); setForgotNewConfirm("");
+    setForgotError(""); setForgotSuccess(false);
+  };
+  const resetLookupState = () => {
+    setShowLookup(false);
+    setLookupInput(""); setLookupQuery("");
+  };
+  const handleForgotReset = () => {
+    const uname = authUsername.trim().toLowerCase();
+    if (!uname) { setForgotError("Enter your username above first."); return; }
+    if (!forgotCode.trim()) { setForgotError("Enter your recovery code."); return; }
+    if (forgotNewPw.length < 4) { setForgotError("New password must be at least 4 characters."); return; }
+    if (forgotNewPw !== forgotNewConfirm) { setForgotError("Passwords do not match."); return; }
+    setForgotError("");
+    resetPasswordMutation.mutate(
+      { data: { username: uname, recoveryCode: forgotCode.trim().toUpperCase(), newPassword: forgotNewPw } },
+      {
+        onSuccess: () => setForgotSuccess(true),
+        onError: (e: unknown) => {
+          const msg = (e as { response?: { data?: { error?: string } } })?.response?.data?.error;
+          setForgotError(msg ?? "Invalid username or recovery code.");
+        },
+      }
+    );
+  };
 
   const { data: leaderboardData } = useGetLeaderboard({
     query: { queryKey: getGetLeaderboardQueryKey() },
@@ -1723,6 +1766,57 @@ export default function Game() {
                             </div>
                           </div>
                         )
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Forgot password — login mode only */}
+              {authMode === "login" && (
+                <div className="border-t border-border/30 pt-2">
+                  <button type="button"
+                    className="text-[9px] text-muted-foreground/60 hover:text-muted-foreground tracking-widest transition-colors w-full text-left"
+                    onClick={() => { setShowForgotPw((v) => !v); setForgotError(""); setForgotSuccess(false); setForgotCode(""); setForgotNewPw(""); setForgotNewConfirm(""); }}>
+                    {showForgotPw ? "▲ HIDE" : "▼ FORGOT PASSWORD? USE RECOVERY CODE"}
+                  </button>
+                  {showForgotPw && (
+                    <div className="mt-2 space-y-2">
+                      {forgotSuccess ? (
+                        <div className="bg-primary/10 border border-primary/25 px-3 py-2 space-y-1">
+                          <div className="text-[10px] text-primary tracking-widest font-bold">✓ PASSWORD RESET</div>
+                          <p className="text-[10px] text-muted-foreground">Sign in with your new password.</p>
+                          <button type="button" className="text-[9px] text-primary/70 hover:text-primary underline underline-offset-2" onClick={resetForgotState}>Close →</button>
+                        </div>
+                      ) : (
+                        <>
+                          <p className="text-[10px] text-muted-foreground leading-relaxed">Enter your username above, then paste your recovery code and choose a new password.</p>
+                          <div>
+                            <label className="block text-[10px] tracking-widest text-muted-foreground mb-1">RECOVERY CODE</label>
+                            <input type="text" placeholder="FORGE-XXXX-XXXX-XXXX" value={forgotCode}
+                              onChange={(e) => { setForgotCode(e.target.value); setForgotError(""); }}
+                              className="w-full bg-secondary/40 border border-border/40 px-3 py-1.5 text-xs text-foreground placeholder:text-muted-foreground/50 outline-none focus:border-primary/50 tracking-widest" />
+                          </div>
+                          <div>
+                            <label className="block text-[10px] tracking-widest text-muted-foreground mb-1">NEW PASSWORD</label>
+                            <input type="password" placeholder="Min. 4 characters" value={forgotNewPw}
+                              onChange={(e) => { setForgotNewPw(e.target.value); setForgotError(""); }}
+                              className="w-full bg-secondary/40 border border-border/40 px-3 py-1.5 text-xs text-foreground placeholder:text-muted-foreground/50 outline-none focus:border-primary/50" />
+                          </div>
+                          <div>
+                            <label className="block text-[10px] tracking-widest text-muted-foreground mb-1">CONFIRM NEW PASSWORD</label>
+                            <input type="password" placeholder="Repeat new password" value={forgotNewConfirm}
+                              onChange={(e) => { setForgotNewConfirm(e.target.value); setForgotError(""); }}
+                              onKeyDown={(e) => { if (e.key === "Enter") handleForgotReset(); }}
+                              className="w-full bg-secondary/40 border border-border/40 px-3 py-1.5 text-xs text-foreground placeholder:text-muted-foreground/50 outline-none focus:border-primary/50" />
+                          </div>
+                          {forgotError && <p className="text-[10px] text-destructive">{forgotError}</p>}
+                          <Button size="sm" className="w-full bg-primary text-primary-foreground hover:bg-primary/90 text-[10px] tracking-widest"
+                            disabled={resetPasswordMutation.isPending || !forgotCode.trim() || !forgotNewPw || !forgotNewConfirm}
+                            onClick={handleForgotReset}>
+                            {resetPasswordMutation.isPending ? "RESETTING…" : "RESET PASSWORD"}
+                          </Button>
+                        </>
                       )}
                     </div>
                   )}
@@ -2964,7 +3058,7 @@ export default function Game() {
               {(["register", "login"] as const).map((mode) => (
                 <button
                   key={mode}
-                  onClick={() => { setAuthMode(mode); setAuthError(""); }}
+                  onClick={() => { setAuthMode(mode); setAuthError(""); resetForgotState(); resetLookupState(); }}
                   className={`flex-1 text-[10px] tracking-widest py-1.5 transition-colors ${
                     authMode === mode
                       ? "bg-primary/10 text-primary border-primary/30"
@@ -3048,6 +3142,106 @@ export default function Game() {
               </Button>
             </div>
 
+            {/* Username lookup — login mode only */}
+            {authMode === "login" && (
+              <div className="border-t border-border/30 pt-2">
+                <button type="button"
+                  className="text-[9px] text-muted-foreground/60 hover:text-muted-foreground tracking-widest transition-colors w-full text-left"
+                  onClick={() => { setShowLookup((v) => !v); setLookupInput(""); setLookupQuery(""); }}>
+                  {showLookup ? "▲ HIDE LOOKUP" : "▼ NOT SURE OF YOUR USERNAME? LOOK IT UP"}
+                </button>
+                {showLookup && (
+                  <div className="mt-2 space-y-2">
+                    <div className="flex gap-2">
+                      <input type="text" placeholder="e.g. dr_gradient" value={lookupInput} maxLength={24}
+                        onChange={(e) => setLookupInput(e.target.value)}
+                        onKeyDown={(e) => { if (e.key === "Enter" && lookupInput.trim()) setLookupQuery(lookupInput.trim().toLowerCase()); }}
+                        className="flex-1 bg-secondary/40 border border-border/40 px-3 py-1.5 text-xs text-foreground placeholder:text-muted-foreground/50 outline-none focus:border-primary/50 tracking-wider" />
+                      <Button size="sm" variant="outline"
+                        className="shrink-0 border-primary/40 text-primary hover:bg-primary/10 text-[10px] tracking-widest"
+                        disabled={!lookupInput.trim() || lookupFetching}
+                        onClick={() => setLookupQuery(lookupInput.trim().toLowerCase())}>
+                        {lookupFetching ? "…" : "LOOK UP"}
+                      </Button>
+                    </div>
+                    {lookupError && <p className="text-[10px] text-destructive">Server error — please try again.</p>}
+                    {!lookupFetching && !lookupError && lookupData && lookupQuery && (
+                      lookupData.exists ? (
+                        <div className="bg-primary/10 border border-primary/25 px-3 py-2 space-y-0.5">
+                          <div className="text-[10px] text-primary tracking-widest font-bold">✓ ACCOUNT FOUND: @{lookupQuery}</div>
+                          {lookupData.scenario && lookupData.day != null && (
+                            <div className="text-[10px] text-muted-foreground">
+                              {lookupData.scenario} · Day {lookupData.day}/14
+                              {lookupData.wins != null && lookupData.wins > 0 && ` · ${lookupData.wins} win${lookupData.wins !== 1 ? "s" : ""}`}
+                            </div>
+                          )}
+                          <button type="button" className="text-[9px] text-primary/70 hover:text-primary underline underline-offset-2 pt-0.5"
+                            onClick={() => { setAuthUsername(lookupQuery); setShowLookup(false); setLookupInput(""); setLookupQuery(""); }}>
+                            Use this username →
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="bg-secondary/40 border border-border/40 px-3 py-2">
+                          <div className="text-[10px] text-muted-foreground">No account found for <span className="text-foreground">@{lookupQuery}</span>. Check spelling or create a new account.</div>
+                        </div>
+                      )
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Forgot password — login mode only */}
+            {authMode === "login" && (
+              <div className="border-t border-border/30 pt-2">
+                <button type="button"
+                  className="text-[9px] text-muted-foreground/60 hover:text-muted-foreground tracking-widest transition-colors w-full text-left"
+                  onClick={() => { setShowForgotPw((v) => !v); setForgotError(""); setForgotSuccess(false); setForgotCode(""); setForgotNewPw(""); setForgotNewConfirm(""); }}>
+                  {showForgotPw ? "▲ HIDE" : "▼ FORGOT PASSWORD? USE RECOVERY CODE"}
+                </button>
+                {showForgotPw && (
+                  <div className="mt-2 space-y-2">
+                    {forgotSuccess ? (
+                      <div className="bg-primary/10 border border-primary/25 px-3 py-2 space-y-1">
+                        <div className="text-[10px] text-primary tracking-widest font-bold">✓ PASSWORD RESET</div>
+                        <p className="text-[10px] text-muted-foreground">Sign in with your new password.</p>
+                        <button type="button" className="text-[9px] text-primary/70 hover:text-primary underline underline-offset-2" onClick={resetForgotState}>Close →</button>
+                      </div>
+                    ) : (
+                      <>
+                        <p className="text-[10px] text-muted-foreground leading-relaxed">Enter your username above, then paste your recovery code and choose a new password.</p>
+                        <div>
+                          <label className="block text-[10px] tracking-widest text-muted-foreground mb-1">RECOVERY CODE</label>
+                          <input type="text" placeholder="FORGE-XXXX-XXXX-XXXX" value={forgotCode}
+                            onChange={(e) => { setForgotCode(e.target.value); setForgotError(""); }}
+                            className="w-full bg-secondary/40 border border-border/40 px-3 py-1.5 text-xs text-foreground placeholder:text-muted-foreground/50 outline-none focus:border-primary/50 tracking-widest" />
+                        </div>
+                        <div>
+                          <label className="block text-[10px] tracking-widest text-muted-foreground mb-1">NEW PASSWORD</label>
+                          <input type="password" placeholder="Min. 4 characters" value={forgotNewPw}
+                            onChange={(e) => { setForgotNewPw(e.target.value); setForgotError(""); }}
+                            className="w-full bg-secondary/40 border border-border/40 px-3 py-1.5 text-xs text-foreground placeholder:text-muted-foreground/50 outline-none focus:border-primary/50" />
+                        </div>
+                        <div>
+                          <label className="block text-[10px] tracking-widest text-muted-foreground mb-1">CONFIRM NEW PASSWORD</label>
+                          <input type="password" placeholder="Repeat new password" value={forgotNewConfirm}
+                            onChange={(e) => { setForgotNewConfirm(e.target.value); setForgotError(""); }}
+                            onKeyDown={(e) => { if (e.key === "Enter") handleForgotReset(); }}
+                            className="w-full bg-secondary/40 border border-border/40 px-3 py-1.5 text-xs text-foreground placeholder:text-muted-foreground/50 outline-none focus:border-primary/50" />
+                        </div>
+                        {forgotError && <p className="text-[10px] text-destructive">{forgotError}</p>}
+                        <Button size="sm" className="w-full bg-primary text-primary-foreground hover:bg-primary/90 text-[10px] tracking-widest"
+                          disabled={resetPasswordMutation.isPending || !forgotCode.trim() || !forgotNewPw || !forgotNewConfirm}
+                          onClick={handleForgotReset}>
+                          {resetPasswordMutation.isPending ? "RESETTING…" : "RESET PASSWORD"}
+                        </Button>
+                      </>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+
             {!playerName && (
               <p className="text-[9px] text-muted-foreground/50 text-center">
                 You can play as a guest — scores won't appear on the leaderboard.
@@ -3121,6 +3315,86 @@ export default function Game() {
               >
                 GOT IT
               </Button>
+
+              {/* Recovery code generation */}
+              <div className="border-t border-border/30 pt-3">
+                <button type="button"
+                  className="text-[9px] text-muted-foreground/60 hover:text-muted-foreground tracking-widest transition-colors w-full text-left"
+                  onClick={() => {
+                    setShowGenRecovery((v) => !v);
+                    setGenRecoveryPassword(""); setGeneratedCode(""); setGenRecoveryError(""); setGenCodeCopied(false);
+                  }}>
+                  {showGenRecovery ? "▲ HIDE" : "▼ GENERATE A RECOVERY CODE"}
+                </button>
+                {showGenRecovery && (
+                  <div className="mt-2 space-y-2">
+                    {generatedCode ? (
+                      <div className="space-y-2">
+                        <div className="text-[10px] tracking-widest text-primary">YOUR RECOVERY CODE — SAVE THIS NOW</div>
+                        <div className="flex items-center gap-2">
+                          <code className="flex-1 bg-secondary/40 border border-primary/30 px-3 py-2 text-xs text-primary break-all select-all tracking-widest">
+                            {generatedCode}
+                          </code>
+                          <Button size="sm" variant="outline"
+                            className="shrink-0 border-primary/40 text-primary hover:bg-primary/10 text-xs"
+                            onClick={() => navigator.clipboard.writeText(generatedCode).then(() => { setGenCodeCopied(true); setTimeout(() => setGenCodeCopied(false), 2000); })}>
+                            {genCodeCopied ? "COPIED!" : "COPY"}
+                          </Button>
+                        </div>
+                        <p className="text-[10px] text-destructive/80 leading-relaxed font-bold">
+                          This code will not be shown again. Store it somewhere safe — it lets you reset your password if you ever forget it.
+                        </p>
+                      </div>
+                    ) : (
+                      <>
+                        <p className="text-[10px] text-muted-foreground leading-relaxed">
+                          Generate a one-time code you can use later to reset your password without needing the old one. Confirm your current password to proceed.
+                        </p>
+                        <div>
+                          <label className="block text-[10px] tracking-widest text-muted-foreground mb-1">CONFIRM CURRENT PASSWORD</label>
+                          <input type="password" placeholder="Current password" value={genRecoveryPassword}
+                            onChange={(e) => { setGenRecoveryPassword(e.target.value); setGenRecoveryError(""); }}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter" && playerName && genRecoveryPassword && !generateRecoveryMutation.isPending) {
+                                setGenRecoveryError("");
+                                generateRecoveryMutation.mutate(
+                                  { data: { username: playerName, password: genRecoveryPassword } },
+                                  {
+                                    onSuccess: (r) => { setGeneratedCode(r.recoveryCode); setGenRecoveryPassword(""); },
+                                    onError: (e: unknown) => {
+                                      const msg = (e as { response?: { data?: { error?: string } } })?.response?.data?.error;
+                                      setGenRecoveryError(msg ?? "Wrong password.");
+                                    },
+                                  }
+                                );
+                              }
+                            }}
+                            className="w-full bg-secondary/40 border border-border/40 px-3 py-1.5 text-xs text-foreground placeholder:text-muted-foreground/50 outline-none focus:border-primary/50" />
+                        </div>
+                        {genRecoveryError && <p className="text-[10px] text-destructive">{genRecoveryError}</p>}
+                        <Button size="sm" className="w-full bg-primary text-primary-foreground hover:bg-primary/90 text-[10px] tracking-widest"
+                          disabled={!genRecoveryPassword || generateRecoveryMutation.isPending}
+                          onClick={() => {
+                            if (!playerName || !genRecoveryPassword) return;
+                            setGenRecoveryError("");
+                            generateRecoveryMutation.mutate(
+                              { data: { username: playerName, password: genRecoveryPassword } },
+                              {
+                                onSuccess: (r) => { setGeneratedCode(r.recoveryCode); setGenRecoveryPassword(""); },
+                                onError: (e: unknown) => {
+                                  const msg = (e as { response?: { data?: { error?: string } } })?.response?.data?.error;
+                                  setGenRecoveryError(msg ?? "Wrong password.");
+                                },
+                              }
+                            );
+                          }}>
+                          {generateRecoveryMutation.isPending ? "GENERATING…" : "GENERATE CODE"}
+                        </Button>
+                      </>
+                    )}
+                  </div>
+                )}
+              </div>
             </div>
           ) : (
             /* ── Guest: UUID code + register CTA ── */

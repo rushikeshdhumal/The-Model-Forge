@@ -22,11 +22,15 @@ import type {
   AuthResponse,
   CheckUsernameParams,
   CheckUsernameResponse,
+  GenerateRecoveryBody,
+  GenerateRecoveryResponse,
   HealthStatus,
   LeaderboardResponse,
   LoadStateParams,
   LoadStateResponse,
   NewSessionResponse,
+  ResetPasswordBody,
+  ResetPasswordResponse,
   SaveStateBody,
   SaveStateResponse,
 } from "./api.schemas";
@@ -541,6 +545,178 @@ export const useLoginPlayer = <
   TContext
 > => {
   return useMutation(getLoginPlayerMutationOptions(options));
+};
+
+/**
+ * @summary Generate a one-time recovery code for a registered player (requires current password)
+ */
+export const getGenerateRecoveryUrl = () => {
+  return `/api/generate-recovery`;
+};
+
+export const generateRecovery = async (
+  generateRecoveryBody: GenerateRecoveryBody,
+  options?: RequestInit,
+): Promise<GenerateRecoveryResponse> => {
+  return customFetch<GenerateRecoveryResponse>(getGenerateRecoveryUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(generateRecoveryBody),
+  });
+};
+
+export const getGenerateRecoveryMutationOptions = <
+  TError = ErrorType<AuthError>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof generateRecovery>>,
+    TError,
+    { data: BodyType<GenerateRecoveryBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof generateRecovery>>,
+  TError,
+  { data: BodyType<GenerateRecoveryBody> },
+  TContext
+> => {
+  const mutationKey = ["generateRecovery"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof generateRecovery>>,
+    { data: BodyType<GenerateRecoveryBody> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return generateRecovery(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type GenerateRecoveryMutationResult = NonNullable<
+  Awaited<ReturnType<typeof generateRecovery>>
+>;
+export type GenerateRecoveryMutationBody = BodyType<GenerateRecoveryBody>;
+export type GenerateRecoveryMutationError = ErrorType<AuthError>;
+
+/**
+ * @summary Generate a one-time recovery code for a registered player (requires current password)
+ */
+export const useGenerateRecovery = <
+  TError = ErrorType<AuthError>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof generateRecovery>>,
+    TError,
+    { data: BodyType<GenerateRecoveryBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof generateRecovery>>,
+  TError,
+  { data: BodyType<GenerateRecoveryBody> },
+  TContext
+> => {
+  return useMutation(getGenerateRecoveryMutationOptions(options));
+};
+
+/**
+ * @summary Reset password using a one-time recovery code
+ */
+export const getResetPasswordUrl = () => {
+  return `/api/reset-password`;
+};
+
+export const resetPassword = async (
+  resetPasswordBody: ResetPasswordBody,
+  options?: RequestInit,
+): Promise<ResetPasswordResponse> => {
+  return customFetch<ResetPasswordResponse>(getResetPasswordUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(resetPasswordBody),
+  });
+};
+
+export const getResetPasswordMutationOptions = <
+  TError = ErrorType<AuthError>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof resetPassword>>,
+    TError,
+    { data: BodyType<ResetPasswordBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof resetPassword>>,
+  TError,
+  { data: BodyType<ResetPasswordBody> },
+  TContext
+> => {
+  const mutationKey = ["resetPassword"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof resetPassword>>,
+    { data: BodyType<ResetPasswordBody> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return resetPassword(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type ResetPasswordMutationResult = NonNullable<
+  Awaited<ReturnType<typeof resetPassword>>
+>;
+export type ResetPasswordMutationBody = BodyType<ResetPasswordBody>;
+export type ResetPasswordMutationError = ErrorType<AuthError>;
+
+/**
+ * @summary Reset password using a one-time recovery code
+ */
+export const useResetPassword = <
+  TError = ErrorType<AuthError>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof resetPassword>>,
+    TError,
+    { data: BodyType<ResetPasswordBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof resetPassword>>,
+  TError,
+  { data: BodyType<ResetPasswordBody> },
+  TContext
+> => {
+  return useMutation(getResetPasswordMutationOptions(options));
 };
 
 /**
