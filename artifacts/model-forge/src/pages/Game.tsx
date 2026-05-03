@@ -629,6 +629,229 @@ const CODEX_CONCEPTS = [
   },
 ];
 
+const CODEX_SCENARIO_DIFFICULTY = [
+  {
+    id: "default",
+    company: "Generic Corp",
+    year: "2024",
+    title: "Standard Production Run",
+    difficulty: 1,
+    problemType: "classification" as const,
+    comingSoon: false,
+    tierRationale: "The cleanest starting point in the game — no inherited model debt, no corrupted training data, no compressed SLA budget. The challenge is purely mechanical: passive decay of 1%/day requires active MLOps infrastructure to offset. The CI/CD auto-retrain cap at 85% means even perfect play cannot score above ~95, making the S-grade achievable but not free.",
+    startingDebt: [
+      "None — full baseline metrics (Precision 80%, Recall 80%, SLA 100%). The simplest handicap in the game.",
+      "No starting skew, no inherited model debt. Every failure from here is your own.",
+    ],
+    signatureEvent: {
+      day: 5,
+      name: "SILENT CONCEPT DRIFT DETECTED",
+      insight: "A 12% feature distribution shift is flagged. Choice A (enable CI/CD) or Choice B (retrain on 30 days) both mitigate it — Choice A is immediate and free of delay. Choice C defers two stacked metric drops on Days 7 and 9.",
+    },
+    scoringTrap: "Reaching Day 14 with metrics in the 70s feels like a win — but if CI/CD was never enabled, your streak suffered on every passive decay day and metric quality drags down all 40 points of that component. Enable CI/CD before Day 5 for S-grade runs.",
+  },
+  {
+    id: "zillow",
+    company: "Zillow",
+    year: "2021",
+    title: "Zillow Offers: The Overfitting Disaster",
+    difficulty: 2,
+    problemType: "regression" as const,
+    comingSoon: false,
+    tierRationale: "Coverage Index (recall) starts at 75% — 5 points below baseline — and the regression problem type reframes both metrics: Accuracy Index is % of estimates landing within ±5% of sale price, not a binary classifier. The Day 3 overfitting event forces an immediate decision before the model has stabilised. Ignoring it schedules two future metric collapses that stack on top of passive decay.",
+    startingDebt: [
+      "Coverage Index starts at 75% — you inherit a model already showing distribution mismatch on recent market data.",
+      "Regression context: there are no false positives or false negatives in the classification sense. Accuracy means pricing error, Coverage means breadth of estimates.",
+    ],
+    signatureEvent: {
+      day: 3,
+      name: "BACKTEST vs. LIVE ERROR DIVERGENCE",
+      insight: "Live prediction error is 5x worse than offline validation. Choice A (L2 regularization + retrain) is the strongest immediate fix. Choice B (collect 90 days of recent data) is the best long-term path but takes 2 days to land. Choice C defers two future collapses on Days 5 and 6.",
+    },
+    scoringTrap: "The 90-day data collection (Choice B) gives larger total gains but its delay window falls in the middle of the run when other events are already compounding. Choice A's immediate Coverage Index improvement is often worth the smaller precision cost for streak preservation.",
+  },
+  {
+    id: "netflix",
+    company: "Netflix",
+    year: "2020",
+    title: "Netflix Recommendations: Concept Drift",
+    difficulty: 2,
+    problemType: "ranking" as const,
+    comingSoon: false,
+    tierRationale: "Inherits a Neural Network (higher inference cost than XGBoost) with Engagement Rate at 78% — 2 below baseline. The ranking problem type gives both metrics independent decay paths. The Day 5 drift event has deferred consequences: ignoring it schedules two Diversity Score drops on Days 7 and 9 that arrive when you're mid-run with the least recovery margin.",
+    startingDebt: [
+      "Engagement Rate (precision) starts at 78% — 2 points below baseline.",
+      "Neural Network inherited — higher baseline inference cost than XGBoost, less headroom before cost events push toward the 100-limit.",
+    ],
+    signatureEvent: {
+      day: 5,
+      name: "GRADUAL CONCEPT DRIFT — VIEWER BEHAVIOUR SHIFT",
+      insight: "COVID lockdown patterns made pre-pandemic training data stale. Choice A (enable CI/CD) counters drift immediately. Choice B (retrain on 30 days) lands +8 precision, +6 recall but with a 3-day delay. Choice C ignores the drift and schedules −8 Diversity Score on Day 7 and −7 on Day 9 — a stacking double collapse.",
+    },
+    scoringTrap: "Diversity Score (recall) is the most at-risk metric. Players who focus on Engagement Rate and defer the drift event let the Day 7 and Day 9 penalties stack, often triggering the CRITICAL: COVERAGE COLLAPSED event mid-run with no cheap recovery left.",
+  },
+  {
+    id: "google",
+    company: "Google",
+    year: "2023",
+    title: "Google Search: The Silent Drift",
+    difficulty: 2,
+    problemType: "ranking" as const,
+    comingSoon: false,
+    tierRationale: "Like Netflix, starts with NDCG at 78% and a Neural Network (the highest base inference cost in the moderate tier). Unlike Netflix's gradual drift, the Day 5 LLM content flood is adversarially induced — the cascade is fast. Ignoring it gives −8 NDCG precision the very next day and −8 MAP recall 3 days later.",
+    startingDebt: [
+      "NDCG Index starts at 78% (2 below baseline).",
+      "Neural Network model with the highest per-request inference cost of any moderate-tier scenario — scaling events are expensive.",
+    ],
+    signatureEvent: {
+      day: 5,
+      name: "LLM CONTENT FLOOD — QUALITY SIGNALS COLLAPSE",
+      insight: "LLM-generated spam is overwhelming your quality classifiers. Choice A (emergency retrain) fixes quality immediately. Choice B (ensemble with LLM-pattern detector) gives precision+7 and recall+5 — the most balanced outcome. Choice C schedules −8 NDCG the next day and −8 MAP recall on Day 8.",
+    },
+    scoringTrap: "Unlike Netflix drift (which manifests slowly), the LLM flood cascade lands hard and fast. Players who choose 'wait and see' see −8 NDCG the very next day — often triggering the low_accuracy event on Day 6 when metrics were already under passive decay pressure.",
+  },
+  {
+    id: "uber",
+    company: "Uber",
+    year: "2019",
+    title: "Uber Surge: The Latency Cliff",
+    difficulty: 3,
+    problemType: "regression" as const,
+    comingSoon: false,
+    tierRationale: "SLA Adherence starts at 92% — already under pressure — and the inherited Neural Network's P99 latency hits 180ms under the Day 3 4x traffic spike. Both valid responses carry lasting consequences: XGBoost fallback costs precision-8/recall-5, cluster scaling doubles inference cost. Either path leaves you managing the downstream trade-off through the remaining 11 days.",
+    startingDebt: [
+      "SLA Adherence starts at 92% — not 100%. The Neural Network has already stressed the serving cluster under background load.",
+      "Neural Network model: accurate but slow under load. Latency is the latent risk hiding behind good offline metrics.",
+    ],
+    signatureEvent: {
+      day: 3,
+      name: "INFERENCE LATENCY CRISIS: P99 = 180ms",
+      insight: "4x city-wide traffic spike violates the 100ms SLA. Choice A (fall back to XGBoost at 35ms P99) restores SLA immediately but costs Demand Index-8 and Surge Coverage-5. Choice B (scale cluster 2x) restores SLA without accuracy loss but doubles inference cost. Choice C (do nothing) cascades −35 SLA over Days 3-4.",
+    },
+    scoringTrap: "Cluster scaling (Choice B) feels like the engineering-correct answer, but inference cost doubling on Day 3 leaves very little budget for any subsequent cost events. If rand_memory_leak or rand_traffic_spike fires later, you can hit the cost limit before Day 14. XGBoost fallback often produces better scores despite the metric hit.",
+  },
+  {
+    id: "stripe",
+    company: "Stripe",
+    year: "2022",
+    title: "Stripe Fraud Detection: Adversarial Poisoning",
+    difficulty: 3,
+    problemType: "classification" as const,
+    comingSoon: false,
+    tierRationale: "The signature event fires on Day 2 — earlier than any other active scenario's signature event — with skew already at Medium. Fraud rings respond adaptively to your choice: raising the detection threshold (Choice C) gives the highest immediate precision gain, but the rings retune their transactions to the new bar, scheduling a precision cliff on Day 5. The adversarial feedback loop makes wrong-choice recovery harder than in any other scenario.",
+    startingDebt: [
+      "Training-serving skew starts at Medium — adversarial transactions have already corrupted the trust-score feature distribution before Day 1.",
+      "Medium skew means one bad event choice away from High skew and its compounding −1/day extra decay on both metrics.",
+    ],
+    signatureEvent: {
+      day: 2,
+      name: "COORDINATED TRUST-SCORE MANIPULATION",
+      insight: "Fraud rings built trust scores with small legitimate transactions before executing large fraudulent charges. Choice A (velocity anomaly detection) clears skew and improves both metrics. Choice B (temporal consistency validation) gives the best balanced outcome: precision+8, recall+4, skew cleared. Choice C (raise threshold) gives precision+10 but recall-12 and schedules precision-8 on Day 5 as fraud rings adapt.",
+    },
+    scoringTrap: "Choice C is the highest-precision immediate play but creates a delayed precision cliff exactly when passive decay is compounding. Players who take it often need to use the low_accuracy triggered event on Day 6 to recover — spending the emergency retrain budget early with 8 days still to run.",
+  },
+  {
+    id: "amazon",
+    company: "Amazon",
+    year: "2018",
+    title: "Amazon Hiring Tool: Bias Encoded at Scale",
+    difficulty: 3,
+    problemType: "classification" as const,
+    comingSoon: false,
+    tierRationale: "The bias compliance event fires on Day 4 and directly interacts with both Candidate Precision AND Candidate Recall simultaneously — unlike most events which primarily move one metric. Skew starts at Medium (demographic proxy features already diverging). The suppression path (Choice C) schedules −28 SLA Adherence 3 days later — large enough to end the run. Both correct mitigations carry precision costs, forcing a controlled trade-off with no free lunch.",
+    startingDebt: [
+      "Training-serving skew starts at Medium — feature distributions already diverge across demographic groups in the inherited training data.",
+      "The model has a disparate impact ratio of 0.61 before the run starts — below the 0.8 EEOC legal threshold. You are inheriting a compliance violation.",
+    ],
+    signatureEvent: {
+      day: 4,
+      name: "DEMOGRAPHIC DISPARITY IN MODEL SCORES",
+      insight: "Disparate impact ratio 0.61 — the compliance team is escalating. Choice A (remove proxy features) costs Candidate Precision-8 but recovers Candidate Recall+3. Choice B (reweight training labels) costs only Precision-3 and recovers Recall+4 — the better balanced outcome. Choice C (suppress report) schedules −28 SLA on Day 7, almost certainly ending the run.",
+    },
+    scoringTrap: "Choice A looks like the 'clean' technical fix — removing bias at the source — but the precision-8 cost on Day 4 often pushes an already-decaying model into the low_accuracy triggered event threshold (precision < 60%) before Day 6. Choice B is the correct answer for maintaining both metrics through the back half of the run.",
+  },
+  {
+    id: "tesla",
+    company: "Tesla",
+    year: "2022",
+    title: "Tesla Autopilot: Edge Case Collapse",
+    difficulty: 2,
+    problemType: "classification" as const,
+    comingSoon: true,
+    tierRationale: "Detection Recall starts at 72% — the lowest starting value of any moderate-tier scenario. Safety-critical context means every recall trade-off carries higher stakes. The Day 3 edge-case collapse event requires targeted training on rare-class data, not a general retrain — players who misread this lose the most recall recovery.",
+    startingDebt: [
+      "Detection Recall starts at 72% — the model already fails to detect a significant fraction of rare road events in production.",
+      "Safety-critical constraint: regulators measure false alarm rates (precision) and miss rates (recall) independently.",
+    ],
+    signatureEvent: {
+      day: 3,
+      name: "EDGE CASE COLLAPSE: RARE ROAD EVENTS",
+      insight: "Stationary emergency vehicles, unusual road markings, and low-visibility pedestrians are failing silently. Choice A (synthetic edge-case training) gives the highest recall recovery (+18) but costs inference. Choice B (ensemble with rule-based fallback) gives +10 recall, smaller cost. Choice C schedules −15 recall on Day 5 and −12 SLA on Day 7.",
+    },
+    scoringTrap: "Average-case accuracy is 99.1% — the event description makes it tempting to accept. Players who choose Choice C learn that rare-class failures escalate to production-common frequencies within two days.",
+  },
+  {
+    id: "tay",
+    company: "Microsoft",
+    year: "2016",
+    title: "Tay: Online Learning Poisoning",
+    difficulty: 3,
+    problemType: "generative" as const,
+    comingSoon: true,
+    tierRationale: "The generative problem type — Coherence + Safety Score — has failure modes that don't exist in classification or ranking. The Day 2 online poisoning event fires at the same early timing as Stripe's, and skew starts at Medium. Safety Score (recall) collapse is existential: Tay was shut down 16 hours after launch because Safety Score hit zero.",
+    startingDebt: [
+      "Output distribution skew starts at Medium — adversarial users have already begun influencing the model's pattern space.",
+      "Real-time online learning means every incoming user message is a potential training signal. The attack surface is every API call.",
+    ],
+    signatureEvent: {
+      day: 2,
+      name: "REAL-TIME ONLINE LEARNING POISONING",
+      insight: "Coordinated adversarial inputs are reinforcing toxic patterns in real time. Choice A (disable online learning, switch to hourly offline retrain) stops the poisoning but costs feature freshness. Choice B (adversarial input filter) is the cleanest fix — restores Coherence without staleness cost. Choice C (rate-limit and monitor) schedules High skew escalation on Day 4 and Coherence−10 on Day 5.",
+    },
+    scoringTrap: "Rate-limiting (Choice C) feels like a proportionate response — but the 24-hour monitoring window is longer than the model can tolerate. By Day 4 the skew is Critical, and by Day 5 Coherence has collapsed. The adversarial poisoning rate during those 3 days far exceeds the rate-limiter's capacity.",
+  },
+  {
+    id: "twitter",
+    company: "Twitter / X",
+    year: "2023",
+    title: "Twitter Algorithmic Amplification Audit",
+    difficulty: 3,
+    problemType: "ranking" as const,
+    comingSoon: true,
+    tierRationale: "Ranking bias events interact with both engagement and fairness metrics simultaneously. Skew starts at Medium. The Day 4 amplification audit triggers dual regulatory and advertiser consequences: the worst choice schedules both High skew escalation and a −22 SLA enforcement action. Engagement Score and Reach Index have competing optimisation pressures that make it hard to improve both simultaneously.",
+    startingDebt: [
+      "Feed distribution skew starts at Medium — amplification patterns already diverge across user segments.",
+      "Engagement optimisation creates structural tension with fairness constraints — the model's objective is misaligned with regulatory requirements from Day 1.",
+    ],
+    signatureEvent: {
+      day: 4,
+      name: "POLITICAL AMPLIFICATION DISPARITY AUDIT",
+      insight: "18% amplification gap flagged. Choice A (add diversity constraint to ranking objective) costs Engagement Score-5 but improves Reach Index+3 and clears skew. Choice B (reweight training data) clears skew and schedules Engagement Score+5 in 2 days — the delayed-payoff option. Choice C (keep maximising engagement) schedules High skew and −22 SLA enforcement on Days 6-7.",
+    },
+    scoringTrap: "The engagement optimisation framing makes Choice C feel correct — engagement IS the business metric. But the regulatory sanction (−22 SLA) lands 3 days later when you've already accepted the skew penalty. Dual compound degradation from both is rarely survivable.",
+  },
+  {
+    id: "facebook",
+    company: "Meta / Facebook",
+    year: "2021",
+    title: "Facebook Real-Time Inference: The Cascade",
+    difficulty: 3,
+    problemType: "ranking" as const,
+    comingSoon: true,
+    tierRationale: "The Day 3 BGP routing failure takes the entire ML serving cluster offline — the only infrastructure-complete shutdown in the game. With no pre-warmed fallback model and no circuit breakers, every choice forces a compromise between SLA and metric quality. The no-fallback constraint is the core difficulty: you're building the fire escape while the building is burning.",
+    startingDebt: [
+      "SLA Adherence starts at 90% — already under mild stress from background serving load.",
+      "No staging model in the registry — there is no tested fallback option when production degrades.",
+    ],
+    signatureEvent: {
+      day: 3,
+      name: "BGP ROUTING FAILURE — INFERENCE UNREACHABLE",
+      insight: "The serving cluster is completely offline with no pre-warmed fallback. Choice A (deploy lightweight rule-based heuristic) restores SLA+20 but costs Relevance Score-15 — the highest single-event precision cost in the game. Choice B (circuit breaker with cached predictions) gives SLA+12 but Feed Recall-8. Choice C (wait for cluster recovery) schedules three stacked SLA drops totalling −35.",
+    },
+    scoringTrap: "The rule-based heuristic (Choice A) gives the best SLA recovery but the −15 precision cost lands on top of whatever passive decay has already accumulated. If Day 3 finds Relevance Score below 75, Choice A almost certainly triggers the low_accuracy event on Day 4 — compounding an already-difficult infrastructure crisis.",
+  },
+] as const;
+
 const CODEX_WIN_LOSS = [
   { label: "Precision ≤ 0%", type: "loss", note: "Model outputs are effectively random. Immediate retrain or rollback required." },
   { label: "Recall ≤ 0%", type: "loss", note: "Model detects nothing. Complete miss rate on all positive cases." },
@@ -813,7 +1036,7 @@ export default function Game() {
   const [briefDismissed, setBriefDismissed] = useState(false);
   const [scenarioBrief, setScenarioBrief] = useState<ScenarioBrief | null>(null);
   const [showCodex, setShowCodex] = useState(false);
-  const [codexSection, setCodexSection] = useState<"metrics" | "concepts" | "reference">("metrics");
+  const [codexSection, setCodexSection] = useState<"metrics" | "concepts" | "reference" | "scenarios">("metrics");
   const [showSave, setShowSave] = useState(false);
   const [restoreInput, setRestoreInput] = useState("");
   const [restoreError, setRestoreError] = useState("");
@@ -2610,7 +2833,7 @@ export default function Game() {
               Reference guide — metrics, concepts, and win/loss conditions
             </p>
             <div className="flex gap-1 pt-2">
-              {(["metrics", "concepts", "reference"] as const).map((tab) => (
+              {(["metrics", "concepts", "reference", "scenarios"] as const).map((tab) => (
                 <button
                   key={tab}
                   onClick={() => setCodexSection(tab)}
@@ -2773,35 +2996,85 @@ export default function Game() {
                 </div>
 
                 <div className="border-t border-border/40 pt-4">
-                  <div className="text-[10px] tracking-widest text-muted-foreground mb-3">SCENARIO DIFFICULTY</div>
-                  <div className="space-y-1.5 text-xs">
-                    {[
-                      { id: "default", label: "Default", difficulty: "Easy", risk: "No inherited problems" },
-                      { id: "netflix-google", label: "Netflix / Google", difficulty: "Medium", risk: "Precision handicap + concept drift event" },
-                      { id: "uber-facebook", label: "Uber / Facebook", difficulty: "Medium", risk: "SLA handicap + latency crisis event" },
-                      { id: "zillow-tesla", label: "Zillow / Tesla", difficulty: "Hard", risk: "Recall handicap + overfitting event" },
-                      { id: "amazon-twitter", label: "Amazon / Twitter", difficulty: "Hard", risk: "Skew handicap + bias audit event" },
-                      { id: "tay-stripe", label: "Tay / Stripe", difficulty: "Hard", risk: "Skew handicap + data poisoning event" },
-                    ].map((entry) => (
-                      <div key={entry.id} className="flex items-start justify-between border-b border-border/20 pb-1.5 gap-3">
-                        <div>
-                          <div className="font-bold">{entry.label}</div>
-                          <div className="text-muted-foreground text-[10px] mt-0.5">{entry.risk}</div>
-                        </div>
-                        <span className={`text-[10px] border px-1.5 py-0.5 shrink-0 ${
-                          entry.difficulty === "Easy"
-                            ? "border-primary/40 text-primary"
-                            : entry.difficulty === "Medium"
-                            ? "border-yellow-400/40 text-yellow-400"
-                            : "border-destructive/40 text-destructive"
-                        }`}>
-                          {entry.difficulty.toUpperCase()}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
+                  <p className="text-[10px] text-muted-foreground">
+                    See the <span className="text-primary cursor-pointer underline underline-offset-2" onClick={() => setCodexSection("scenarios")}>SCENARIOS tab</span> for per-scenario difficulty rationale, starting debt, signature events, and scoring traps.
+                  </p>
                 </div>
               </div>
+            )}
+
+            {/* ---- SCENARIOS TAB ---- */}
+            {codexSection === "scenarios" && (
+              <>
+                <p className="text-[10px] text-muted-foreground leading-relaxed">
+                  Per-scenario breakdown: what you inherit, what the signature event is, why the difficulty tier is justified, and what mistake costs the most points.
+                </p>
+                {CODEX_SCENARIO_DIFFICULTY.map((s) => {
+                  const tierLabel = s.difficulty === 1 ? "BEGINNER ★☆☆" : s.difficulty === 2 ? "MODERATE ★★☆" : "HARD ★★★";
+                  const tierColor = s.difficulty === 1 ? "text-primary border-primary/40" : s.difficulty === 2 ? "text-yellow-400 border-yellow-400/40" : "text-destructive border-destructive/40";
+                  const problemLabel = s.problemType === "classification" ? "CLASSIFICATION" : s.problemType === "regression" ? "REGRESSION" : s.problemType === "ranking" ? "RANKING" : "GENERATIVE";
+                  return (
+                    <details key={s.id} className={`group border open:border-primary/30 ${s.comingSoon ? "border-border/20 opacity-50" : "border-border/40"}`}>
+                      <summary className="flex items-center gap-2 px-3 py-2.5 cursor-pointer select-none list-none hover:bg-primary/5 transition-colors">
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="text-xs font-bold tracking-widest">{s.company}</span>
+                            <span className="text-[9px] text-muted-foreground">{s.year}</span>
+                            {s.comingSoon && <span className="text-[9px] border border-border/40 px-1 text-muted-foreground">COMING SOON</span>}
+                          </div>
+                          <div className="text-[10px] text-muted-foreground truncate">{s.title}</div>
+                        </div>
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          <span className={`text-[9px] border px-1.5 py-0.5 ${tierColor}`}>{tierLabel}</span>
+                          <span className="text-muted-foreground text-xs group-open:rotate-90 transition-transform">▶</span>
+                        </div>
+                      </summary>
+                      <div className="px-4 pb-4 pt-3 space-y-3.5 border-t border-border/30">
+                        {/* Problem type badge */}
+                        <div className="flex items-center gap-2">
+                          <span className="text-[9px] tracking-widest text-muted-foreground">PROBLEM TYPE</span>
+                          <span className="text-[9px] border border-border/40 px-1.5 py-0.5 text-muted-foreground">{problemLabel}</span>
+                        </div>
+
+                        {/* Why this tier */}
+                        <div>
+                          <div className="text-[9px] tracking-widest text-muted-foreground mb-1">WHY THIS TIER</div>
+                          <p className="text-xs leading-relaxed">{s.tierRationale}</p>
+                        </div>
+
+                        {/* Starting debt */}
+                        <div>
+                          <div className="text-[9px] tracking-widest text-yellow-400/80 mb-1.5">WHAT YOU INHERIT</div>
+                          <ul className="space-y-1">
+                            {s.startingDebt.map((d, i) => (
+                              <li key={i} className="text-xs flex gap-2">
+                                <span className="text-yellow-400/70 shrink-0">—</span>
+                                <span className="text-muted-foreground">{d}</span>
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+
+                        {/* Signature event */}
+                        <div className="bg-secondary/20 border border-border/30 px-3 py-2.5 space-y-1.5">
+                          <div className="flex items-center gap-2">
+                            <span className="text-[9px] tracking-widest text-muted-foreground">SIGNATURE EVENT</span>
+                            <span className="text-[9px] border border-border/40 px-1.5 py-0.5 text-muted-foreground">DAY {s.signatureEvent.day}</span>
+                          </div>
+                          <div className="text-[10px] font-bold text-primary tracking-wide">{s.signatureEvent.name}</div>
+                          <p className="text-xs text-muted-foreground leading-relaxed">{s.signatureEvent.insight}</p>
+                        </div>
+
+                        {/* Scoring trap */}
+                        <div className="border-l-2 border-destructive/40 pl-2.5">
+                          <div className="text-[9px] tracking-widest text-destructive mb-1">SCORING TRAP</div>
+                          <p className="text-xs text-muted-foreground leading-relaxed">{s.scoringTrap}</p>
+                        </div>
+                      </div>
+                    </details>
+                  );
+                })}
+              </>
             )}
           </div>
         </SheetContent>
