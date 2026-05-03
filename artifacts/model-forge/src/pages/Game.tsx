@@ -1,4 +1,5 @@
 import { useEffect, useState, useCallback, useRef } from "react";
+import { useTheme } from "@/lib/theme";
 import {
   useNewSession,
   useLoadState,
@@ -295,13 +296,22 @@ function MetricBar({
   maxVal?: number;
 }) {
   const pct = Math.min(100, Math.max(0, (value / maxVal) * 100));
+  const displayValue = subtitle ?? `${value.toFixed(1)}%`;
   return (
     <div data-testid={`metric-${label.toLowerCase().replace(/\s+/g, "-")}`}>
       <div className="flex justify-between text-xs mb-1">
-        <span className="text-muted-foreground uppercase tracking-widest">{label}</span>
-        <span className={metricColor(pct)}>{subtitle ?? `${value.toFixed(1)}%`}</span>
+        <span className="text-muted-foreground uppercase tracking-widest" id={`metric-label-${label.toLowerCase().replace(/\s+/g, "-")}`}>{label}</span>
+        <span className={metricColor(pct)} aria-live="polite">{displayValue}</span>
       </div>
-      <div className="h-1.5 bg-secondary/60 rounded-none overflow-hidden">
+      <div
+        className="h-1.5 bg-secondary/60 rounded-none overflow-hidden"
+        role="meter"
+        aria-valuemin={0}
+        aria-valuemax={maxVal}
+        aria-valuenow={Math.round(value)}
+        aria-label={`${label}: ${displayValue}`}
+        aria-labelledby={`metric-label-${label.toLowerCase().replace(/\s+/g, "-")}`}
+      >
         <div
           className={`h-full transition-all duration-500 ${metricBarColor(pct)}`}
           style={{ width: `${pct}%` }}
@@ -542,8 +552,9 @@ export default function Game() {
     );
   };
 
+  const { theme, toggleTheme } = useTheme();
+
   useEffect(() => {
-    document.documentElement.classList.add("dark");
     document.title = "The Model Forge | ML Production Simulator";
   }, []);
 
@@ -736,16 +747,26 @@ export default function Game() {
         <div className="border-b border-border/40 px-6 py-4 flex items-center justify-between">
           <div>
             <h1 className="text-xl font-bold text-primary tracking-tighter">
-              THE MODEL FORGE<span className="animate-pulse">_</span>
+              THE MODEL FORGE<span className="animate-pulse" aria-hidden="true">_</span>
             </h1>
             <p className="text-[10px] text-muted-foreground tracking-widest">ML PRODUCTION SIMULATOR</p>
           </div>
-          <button
-            onClick={() => { setAuthMode(playerName ? "login" : "register"); setAuthUsername(""); setAuthPassword(""); setAuthConfirm(""); setAuthError(""); setShowIdentity(true); }}
-            className="text-[11px] text-primary/60 border border-primary/25 px-2.5 py-1 tracking-widest hover:border-primary/50 hover:text-primary transition-colors"
-          >
-            {playerName ? playerName.toUpperCase() : "SIGN IN / REGISTER"}
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={toggleTheme}
+              aria-label={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
+              className="text-[11px] text-muted-foreground/70 border border-border/40 px-2.5 py-1 tracking-widest hover:border-primary/40 hover:text-primary transition-colors"
+            >
+              {theme === "dark" ? "☀ LIGHT" : "◗ DARK"}
+            </button>
+            <button
+              onClick={() => { setAuthMode(playerName ? "login" : "register"); setAuthUsername(""); setAuthPassword(""); setAuthConfirm(""); setAuthError(""); setShowIdentity(true); }}
+              className="text-[11px] text-primary/60 border border-primary/25 px-2.5 py-1 tracking-widest hover:border-primary/50 hover:text-primary transition-colors"
+              aria-label={playerName ? `Signed in as ${playerName}. Click to manage account.` : "Sign in or register"}
+            >
+              {playerName ? playerName.toUpperCase() : "SIGN IN / REGISTER"}
+            </button>
+          </div>
         </div>
 
         {/* Hero */}
@@ -876,29 +897,32 @@ export default function Game() {
                 ))}
               </div>
               <div>
-                <div className="text-[10px] tracking-widest text-muted-foreground mb-1">USERNAME</div>
-                <input type="text" placeholder="e.g. dr_gradient" value={authUsername} autoFocus maxLength={24}
+                <label htmlFor="auth-username" className="block text-[10px] tracking-widest text-muted-foreground mb-1">USERNAME</label>
+                <input id="auth-username" type="text" placeholder="e.g. dr_gradient" value={authUsername} autoFocus maxLength={24}
                   onChange={(e) => { setAuthUsername(e.target.value); setAuthError(""); }}
                   onKeyDown={(e) => { if (e.key === "Enter") authMode === "register" ? handleRegister() : handleLogin(); }}
+                  autoComplete="username"
                   className="w-full bg-secondary/40 border border-border/40 px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground/50 outline-none focus:border-primary/50 tracking-wider" />
               </div>
               <div>
-                <div className="text-[10px] tracking-widest text-muted-foreground mb-1">PASSWORD</div>
-                <input type="password" placeholder="Min. 4 characters" value={authPassword} maxLength={72}
+                <label htmlFor="auth-password" className="block text-[10px] tracking-widest text-muted-foreground mb-1">PASSWORD</label>
+                <input id="auth-password" type="password" placeholder="Min. 4 characters" value={authPassword} maxLength={72}
                   onChange={(e) => { setAuthPassword(e.target.value); setAuthError(""); }}
                   onKeyDown={(e) => { if (e.key === "Enter") authMode === "register" ? handleRegister() : handleLogin(); }}
+                  autoComplete={authMode === "register" ? "new-password" : "current-password"}
                   className="w-full bg-secondary/40 border border-border/40 px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground/50 outline-none focus:border-primary/50" />
               </div>
               {authMode === "register" && (
                 <div>
-                  <div className="text-[10px] tracking-widest text-muted-foreground mb-1">CONFIRM PASSWORD</div>
-                  <input type="password" placeholder="Repeat password" value={authConfirm} maxLength={72}
+                  <label htmlFor="auth-confirm" className="block text-[10px] tracking-widest text-muted-foreground mb-1">CONFIRM PASSWORD</label>
+                  <input id="auth-confirm" type="password" placeholder="Repeat password" value={authConfirm} maxLength={72}
                     onChange={(e) => { setAuthConfirm(e.target.value); setAuthError(""); }}
                     onKeyDown={(e) => { if (e.key === "Enter") handleRegister(); }}
+                    autoComplete="new-password"
                     className="w-full bg-secondary/40 border border-border/40 px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground/50 outline-none focus:border-primary/50" />
                 </div>
               )}
-              {authError && <p className="text-[10px] text-destructive border-l-2 border-destructive/40 pl-2">{authError}</p>}
+              {authError && <p role="alert" className="text-[10px] text-destructive border-l-2 border-destructive/40 pl-2">{authError}</p>}
               <div className="flex gap-2 pt-1">
                 <Button className="flex-1 font-bold tracking-widest" disabled={authPending}
                   onClick={authMode === "register" ? handleRegister : handleLogin}>
@@ -918,12 +942,15 @@ export default function Game() {
 
   return (
     <div className="min-h-screen bg-background text-foreground font-mono">
+      {/* Skip to main content */}
+      <a href="#main-content" className="skip-link">Skip to main content</a>
+
       {/* Header */}
       <header className="border-b border-border bg-card/50 px-4 md:px-8 py-4 sticky top-0 z-10 backdrop-blur-sm">
         <div className="max-w-screen-xl mx-auto flex flex-col md:flex-row items-start md:items-center justify-between gap-3">
           <div>
             <h1 className="text-2xl md:text-3xl font-bold text-primary tracking-tighter leading-none">
-              THE MODEL FORGE<span className="animate-pulse ml-0.5">_</span>
+              THE MODEL FORGE<span className="animate-pulse ml-0.5" aria-hidden="true">_</span>
             </h1>
             <div className="flex items-center gap-2 mt-0.5">
               <p className="text-xs text-muted-foreground tracking-widest">ML PRODUCTION SIMULATOR</p>
@@ -1021,6 +1048,13 @@ export default function Game() {
             >
               RESET
             </Button>
+            <button
+              onClick={toggleTheme}
+              aria-label={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
+              className="text-[11px] text-muted-foreground/70 border border-border/40 px-2 py-1 tracking-widest hover:border-primary/40 hover:text-primary transition-colors"
+            >
+              {theme === "dark" ? "☀" : "◗"}
+            </button>
           </div>
         </div>
       </header>
@@ -1073,7 +1107,7 @@ export default function Game() {
         </div>
       )}
 
-      <main className="max-w-screen-xl mx-auto p-4 md:p-8 grid grid-cols-1 md:grid-cols-3 gap-5">
+      <main id="main-content" className="max-w-screen-xl mx-auto p-4 md:p-8 grid grid-cols-1 md:grid-cols-3 gap-5">
         {/* ---- COL 1: Metrics ---- */}
         <div className="space-y-5">
           <Card className="border-border/60">
@@ -1114,7 +1148,7 @@ export default function Game() {
               <CardContent className="p-0 pb-3">
                 <ResponsiveContainer width="100%" height={110}>
                   <LineChart data={chartData} margin={{ top: 5, right: 16, left: -20, bottom: 0 }}>
-                    <CartesianGrid strokeDasharray="2 4" stroke="rgba(255,255,255,0.05)" />
+                    <CartesianGrid strokeDasharray="2 4" stroke="var(--chart-grid, rgba(0,0,0,0.07))" />
                     <XAxis dataKey="day" tick={{ fontSize: 9, fill: "hsl(var(--muted-foreground))" }} />
                     <YAxis domain={[0, 100]} tick={{ fontSize: 9, fill: "hsl(var(--muted-foreground))" }} />
                     <RechartsTooltip
@@ -1477,7 +1511,7 @@ export default function Game() {
                 <div className="text-[10px] tracking-widest text-muted-foreground mb-2">METRIC HISTORY — FULL RUN</div>
                 <ResponsiveContainer width="100%" height={160}>
                   <LineChart data={fullRunChartData} margin={{ top: 4, right: 16, left: -20, bottom: 0 }}>
-                    <CartesianGrid strokeDasharray="2 4" stroke="rgba(255,255,255,0.04)" />
+                    <CartesianGrid strokeDasharray="2 4" stroke="var(--chart-grid, rgba(0,0,0,0.07))" />
                     <XAxis dataKey="day" tick={{ fontSize: 9, fill: "hsl(var(--muted-foreground))" }} />
                     <YAxis domain={[0, 100]} tick={{ fontSize: 9, fill: "hsl(var(--muted-foreground))" }} />
                     <RechartsTooltip
