@@ -69,6 +69,20 @@ function advanceDay(s: GameState): GameState {
   s.metrics.slaAdherence = Math.min(100, Math.max(0, s.metrics.slaAdherence));
   s.metrics.inferenceCost = Math.min(100, Math.max(0, s.metrics.inferenceCost));
 
+  // Streak tracking — consecutive days with all metrics in healthy range
+  const safeDay =
+    s.metrics.precision >= 60 &&
+    s.metrics.recall >= 60 &&
+    s.metrics.slaAdherence >= 60 &&
+    s.metrics.skew !== "High" &&
+    s.metrics.featureStaleness <= 24;
+  if (safeDay) {
+    s.streak = (s.streak ?? 0) + 1;
+    s.maxStreak = Math.max(s.maxStreak ?? 0, s.streak);
+  } else {
+    s.streak = 0;
+  }
+
   // Loss conditions
   if (
     s.metrics.precision <= 0 ||

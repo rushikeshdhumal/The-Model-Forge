@@ -29,6 +29,8 @@ export interface GameState {
   history: any[];
   userLevel: "intern" | "engineer" | "mlops";
   wins: number;
+  streak: number;
+  maxStreak: number;
 }
 
 export interface ModelInfo {
@@ -60,5 +62,7 @@ export const DEFAULT_STATE: GameState = {
   futureEffects: [],
   history: [],
   userLevel: "intern",
-  wins: 0
+  wins: 0,
+  streak: 0,
+  maxStreak: 0,
 };

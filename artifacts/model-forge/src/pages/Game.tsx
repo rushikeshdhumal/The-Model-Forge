@@ -1142,7 +1142,8 @@ export default function Game() {
 
   const copyGameOverSummary = () => {
     const outcome = gameState.status === "won" ? "survived" : "failed";
-    const text = `I ${outcome} Day ${gameState.day}/14 on The Model Forge! Final: ${metricLabels.precision} ${gameState.metrics.precision.toFixed(0)}%, ${metricLabels.recall} ${gameState.metrics.recall.toFixed(0)}%, SLA ${gameState.metrics.slaAdherence.toFixed(0)}%. Play at ${window.location.origin}`;
+    const streakNote = (gameState.maxStreak ?? 0) > 0 ? ` Best streak: ${gameState.maxStreak} clean days.` : "";
+    const text = `I ${outcome} Day ${gameState.day}/14 on The Model Forge! Final: ${metricLabels.precision} ${gameState.metrics.precision.toFixed(0)}%, ${metricLabels.recall} ${gameState.metrics.recall.toFixed(0)}%, SLA ${gameState.metrics.slaAdherence.toFixed(0)}%.${streakNote} Play at ${window.location.origin}`;
     navigator.clipboard.writeText(text).catch(() => {});
     setGameOverCopied(true);
     setTimeout(() => setGameOverCopied(false), 2000);
@@ -1403,6 +1404,14 @@ export default function Game() {
             {gameState.wins > 0 && (
               <Badge className="bg-primary/20 text-primary border-primary/40">
                 {gameState.wins} WIN{gameState.wins > 1 ? "S" : ""}
+              </Badge>
+            )}
+            {(gameState.streak ?? 0) >= 2 && (
+              <Badge
+                title={`${gameState.streak} consecutive clean days — all metrics in healthy range`}
+                className="bg-orange-500/15 text-orange-400 border border-orange-500/35 font-mono text-xs gap-1"
+              >
+                🔥 {gameState.streak}d streak
               </Badge>
             )}
             <Select value={gameState.scenario} onValueChange={handleScenarioChange}>
@@ -1930,6 +1939,20 @@ export default function Game() {
                 </div>
               ))}
             </div>
+
+            {/* Streak stat */}
+            {(gameState.maxStreak ?? 0) > 0 && (
+              <div className="flex items-center gap-3 border border-orange-500/20 bg-orange-500/5 px-4 py-2.5">
+                <span className="text-lg">🔥</span>
+                <div className="flex-1">
+                  <div className="text-[10px] tracking-widest text-muted-foreground">BEST CLEAN STREAK</div>
+                  <div className="text-sm font-bold text-orange-400">
+                    {gameState.maxStreak} consecutive day{gameState.maxStreak !== 1 ? "s" : ""} with all metrics in the green
+                  </div>
+                </div>
+                <div className="text-2xl font-bold text-orange-400">{gameState.maxStreak}</div>
+              </div>
+            )}
 
             {/* Full run chart */}
             {fullRunChartData.length > 1 && (
