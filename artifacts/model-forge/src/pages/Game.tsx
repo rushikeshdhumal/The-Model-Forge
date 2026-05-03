@@ -875,7 +875,7 @@ export default function Game() {
         </div>
 
         {/* Auth dialog also available from landing */}
-        <Dialog open={showIdentity} onOpenChange={(open) => { if (!open && playerName) setShowIdentity(false); }}>
+        <Dialog open={showIdentity} onOpenChange={setShowIdentity}>
           <DialogContent className="bg-card border-primary/30 font-mono max-w-sm">
             <DialogHeader>
               <DialogTitle className="text-primary tracking-widest text-sm">
@@ -897,16 +897,16 @@ export default function Game() {
                 ))}
               </div>
               <div>
-                <label htmlFor="auth-username" className="block text-[10px] tracking-widest text-muted-foreground mb-1">USERNAME</label>
-                <input id="auth-username" type="text" placeholder="e.g. dr_gradient" value={authUsername} autoFocus maxLength={24}
+                <label htmlFor="landing-auth-username" className="block text-[10px] tracking-widest text-muted-foreground mb-1">USERNAME</label>
+                <input id="landing-auth-username" type="text" placeholder="e.g. dr_gradient" value={authUsername} autoFocus maxLength={24}
                   onChange={(e) => { setAuthUsername(e.target.value); setAuthError(""); }}
                   onKeyDown={(e) => { if (e.key === "Enter") authMode === "register" ? handleRegister() : handleLogin(); }}
                   autoComplete="username"
                   className="w-full bg-secondary/40 border border-border/40 px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground/50 outline-none focus:border-primary/50 tracking-wider" />
               </div>
               <div>
-                <label htmlFor="auth-password" className="block text-[10px] tracking-widest text-muted-foreground mb-1">PASSWORD</label>
-                <input id="auth-password" type="password" placeholder="Min. 4 characters" value={authPassword} maxLength={72}
+                <label htmlFor="landing-auth-password" className="block text-[10px] tracking-widest text-muted-foreground mb-1">PASSWORD</label>
+                <input id="landing-auth-password" type="password" placeholder="Min. 4 characters" value={authPassword} maxLength={72}
                   onChange={(e) => { setAuthPassword(e.target.value); setAuthError(""); }}
                   onKeyDown={(e) => { if (e.key === "Enter") authMode === "register" ? handleRegister() : handleLogin(); }}
                   autoComplete={authMode === "register" ? "new-password" : "current-password"}
@@ -914,8 +914,8 @@ export default function Game() {
               </div>
               {authMode === "register" && (
                 <div>
-                  <label htmlFor="auth-confirm" className="block text-[10px] tracking-widest text-muted-foreground mb-1">CONFIRM PASSWORD</label>
-                  <input id="auth-confirm" type="password" placeholder="Repeat password" value={authConfirm} maxLength={72}
+                  <label htmlFor="landing-auth-confirm" className="block text-[10px] tracking-widest text-muted-foreground mb-1">CONFIRM PASSWORD</label>
+                  <input id="landing-auth-confirm" type="password" placeholder="Repeat password" value={authConfirm} maxLength={72}
                     onChange={(e) => { setAuthConfirm(e.target.value); setAuthError(""); }}
                     onKeyDown={(e) => { if (e.key === "Enter") handleRegister(); }}
                     autoComplete="new-password"
@@ -928,11 +928,16 @@ export default function Game() {
                   onClick={authMode === "register" ? handleRegister : handleLogin}>
                   {authPending ? "CONNECTING…" : authMode === "register" ? "CREATE ACCOUNT" : "SIGN IN"}
                 </Button>
-                {playerName && (
-                  <Button variant="outline" className="border-border/40 text-muted-foreground text-xs"
-                    onClick={() => setShowIdentity(false)}>CANCEL</Button>
-                )}
+                <Button variant="outline" className="border-border/40 text-muted-foreground text-xs"
+                  onClick={() => setShowIdentity(false)}>
+                  {playerName ? "CANCEL" : "SKIP"}
+                </Button>
               </div>
+              {!playerName && (
+                <p className="text-[9px] text-muted-foreground/50 text-center">
+                  You can play as a guest — scores won't appear on the leaderboard.
+                </p>
+              )}
             </div>
           </DialogContent>
         </Dialog>
@@ -1843,7 +1848,14 @@ export default function Game() {
 
               <DialogFooter>
                 <Button
-                  onClick={() => setScenarioBrief(null)}
+                  onClick={() => {
+                    setScenarioBrief(null);
+                    if (!playerName) {
+                      setAuthMode("register");
+                      setAuthUsername(""); setAuthPassword(""); setAuthConfirm(""); setAuthError("");
+                      setShowIdentity(true);
+                    }
+                  }}
                   className="w-full font-bold tracking-widest"
                   data-testid="button-start-scenario"
                 >
@@ -1886,7 +1898,7 @@ export default function Game() {
       </Dialog>
 
       {/* Player Auth dialog */}
-      <Dialog open={showIdentity} onOpenChange={(open) => { if (!open && playerName) setShowIdentity(false); }}>
+      <Dialog open={showIdentity} onOpenChange={setShowIdentity}>
         <DialogContent className="bg-card border-primary/30 font-mono max-w-sm">
           <DialogHeader>
             <DialogTitle className="text-primary tracking-widest text-sm">
@@ -1919,13 +1931,15 @@ export default function Game() {
 
             {/* Username */}
             <div>
-              <div className="text-[10px] tracking-widest text-muted-foreground mb-1">USERNAME</div>
+              <label htmlFor="game-auth-username" className="block text-[10px] tracking-widest text-muted-foreground mb-1">USERNAME</label>
               <input
+                id="game-auth-username"
                 type="text"
                 placeholder="e.g. dr_gradient"
                 value={authUsername}
                 autoFocus
                 maxLength={24}
+                autoComplete="username"
                 onChange={(e) => { setAuthUsername(e.target.value); setAuthError(""); }}
                 onKeyDown={(e) => { if (e.key === "Enter") authMode === "register" ? handleRegister() : handleLogin(); }}
                 className="w-full bg-secondary/40 border border-border/40 px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground/50 outline-none focus:border-primary/50 tracking-wider"
@@ -1934,12 +1948,14 @@ export default function Game() {
 
             {/* Password */}
             <div>
-              <div className="text-[10px] tracking-widest text-muted-foreground mb-1">PASSWORD</div>
+              <label htmlFor="game-auth-password" className="block text-[10px] tracking-widest text-muted-foreground mb-1">PASSWORD</label>
               <input
+                id="game-auth-password"
                 type="password"
                 placeholder="Min. 4 characters"
                 value={authPassword}
                 maxLength={72}
+                autoComplete={authMode === "register" ? "new-password" : "current-password"}
                 onChange={(e) => { setAuthPassword(e.target.value); setAuthError(""); }}
                 onKeyDown={(e) => { if (e.key === "Enter") authMode === "register" ? handleRegister() : handleLogin(); }}
                 className="w-full bg-secondary/40 border border-border/40 px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground/50 outline-none focus:border-primary/50"
@@ -1949,12 +1965,14 @@ export default function Game() {
             {/* Confirm password (register only) */}
             {authMode === "register" && (
               <div>
-                <div className="text-[10px] tracking-widest text-muted-foreground mb-1">CONFIRM PASSWORD</div>
+                <label htmlFor="game-auth-confirm" className="block text-[10px] tracking-widest text-muted-foreground mb-1">CONFIRM PASSWORD</label>
                 <input
+                  id="game-auth-confirm"
                   type="password"
                   placeholder="Repeat password"
                   value={authConfirm}
                   maxLength={72}
+                  autoComplete="new-password"
                   onChange={(e) => { setAuthConfirm(e.target.value); setAuthError(""); }}
                   onKeyDown={(e) => { if (e.key === "Enter") handleRegister(); }}
                   className="w-full bg-secondary/40 border border-border/40 px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground/50 outline-none focus:border-primary/50"
@@ -1963,7 +1981,7 @@ export default function Game() {
             )}
 
             {authError && (
-              <p className="text-[10px] text-destructive leading-relaxed border-l-2 border-destructive/40 pl-2">{authError}</p>
+              <p role="alert" className="text-[10px] text-destructive leading-relaxed border-l-2 border-destructive/40 pl-2">{authError}</p>
             )}
 
             <div className="flex gap-2 pt-1">
@@ -1974,16 +1992,20 @@ export default function Game() {
               >
                 {authPending ? "CONNECTING…" : authMode === "register" ? "CREATE ACCOUNT" : "SIGN IN"}
               </Button>
-              {playerName && (
-                <Button
-                  variant="outline"
-                  className="border-border/40 text-muted-foreground hover:text-foreground text-xs"
-                  onClick={() => setShowIdentity(false)}
-                >
-                  CANCEL
-                </Button>
-              )}
+              <Button
+                variant="outline"
+                className="border-border/40 text-muted-foreground hover:text-foreground text-xs"
+                onClick={() => setShowIdentity(false)}
+              >
+                {playerName ? "CANCEL" : "SKIP"}
+              </Button>
             </div>
+
+            {!playerName && (
+              <p className="text-[9px] text-muted-foreground/50 text-center">
+                You can play as a guest — scores won't appear on the leaderboard.
+              </p>
+            )}
 
             <p className="text-[9px] text-muted-foreground/60 text-center leading-relaxed">
               Passwords are hashed and never stored in plain text.
