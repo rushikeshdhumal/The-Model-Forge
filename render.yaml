@@ -2,18 +2,15 @@
 # This file defines all services needed to deploy the application
 # See: https://render.com/docs/blueprint-spec
 
-services:
+databases:
   # PostgreSQL Database
-  - type: pserv
-    name: model-forge-db
-    env: docker
+  - name: model-forge-db
+    databaseName: modelforge
+    user: modelforge
     plan: free
     region: oregon
-    databases:
-      - name: modelforge
-        databaseName: modelforge
-        user: modelforge
 
+services:
   # API Server (Express Backend)
   - type: web
     name: model-forge-api
