@@ -40,18 +40,20 @@ jobs:
     
     steps:
       - name: Deploy API to Render
-        if: ${{ secrets.RENDER_API_DEPLOY_HOOK != '' }}
+        env:
+          DEPLOY_HOOK: ${{ secrets.RENDER_API_DEPLOY_HOOK }}
+        if: env.DEPLOY_HOOK != ''
         run: |
-          curl -X POST "${{ secrets.RENDER_API_DEPLOY_HOOK }}"
+          curl -X POST "$DEPLOY_HOOK"
       
       - name: Deploy Frontend to Render
-        if: ${{ secrets.RENDER_FRONTEND_DEPLOY_HOOK != '' }}
+        env:
+          DEPLOY_HOOK: ${{ secrets.RENDER_FRONTEND_DEPLOY_HOOK }}
+        if: env.DEPLOY_HOOK != ''
         run: |
-          curl -X POST "${{ secrets.RENDER_FRONTEND_DEPLOY_HOOK }}"
+          curl -X POST "$DEPLOY_HOOK"
       
       - name: Deployment Status
         run: |
           echo "✅ Deployment triggered successfully"
           echo "Check Render dashboard for deployment status"
-
-# Made with Bob
