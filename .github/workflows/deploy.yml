@@ -40,12 +40,12 @@ jobs:
     
     steps:
       - name: Deploy API to Render
-        if: ${{ secrets.RENDER_API_DEPLOY_HOOK }}
+        if: ${{ secrets.RENDER_API_DEPLOY_HOOK != '' }}
         run: |
           curl -X POST "${{ secrets.RENDER_API_DEPLOY_HOOK }}"
       
       - name: Deploy Frontend to Render
-        if: ${{ secrets.RENDER_FRONTEND_DEPLOY_HOOK }}
+        if: ${{ secrets.RENDER_FRONTEND_DEPLOY_HOOK != '' }}
         run: |
           curl -X POST "${{ secrets.RENDER_FRONTEND_DEPLOY_HOOK }}"
       
