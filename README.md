@@ -46,6 +46,15 @@ The database layer includes indexes for common access patterns such as leaderboa
 
 See `docs/DB.md` for schema details and query guidance.
 
+## Deployment
+
+**Quick Start**: See [QUICKSTART-RENDER.md](./QUICKSTART-RENDER.md) to deploy to Render's free tier in 15 minutes.
+
+**Deployment Guides**:
+- [Render Deployment](./docs/DEPLOYMENT-RENDER.md) — Complete guide for Render (free tier)
+- [General Deployment](./docs/DEPLOYMENT.md) — Platform-agnostic deployment guide
+- [Verification Checklist](./docs/DEPLOYMENT-VERIFICATION.md) — Post-deployment testing
+
 ## Architecture and docs
 
 - `docs/ARCHITECTURE.md` — system layout, request flow, and data model
@@ -53,6 +62,8 @@ See `docs/DB.md` for schema details and query guidance.
 - `docs/GAMEPLAY.md` — gameplay loop, scoring, and player guidance
 - `docs/SECURITY.md` — auth, recovery, and platform hardening
 - `docs/DEPLOYMENT.md` — environment variables, build, and deployment flow
+- `docs/DEPLOYMENT-RENDER.md` — Render-specific deployment guide
+- `docs/DEPLOYMENT-VERIFICATION.md` — deployment verification checklist
 - `docs/OPERATIONS.md` — maintenance, incident response, and release checks
 - `docs/CONTRIBUTING.md` — contribution workflow and guidelines
 - `docs/DB.md` — database schema, indexes, and access patterns
