@@ -1,0 +1,72 @@
+# Render Blueprint for The Model Forge
+# This file defines all services needed to deploy the application
+# See: https://render.com/docs/blueprint-spec
+
+services:
+  # PostgreSQL Database
+  - type: pserv
+    name: model-forge-db
+    env: docker
+    plan: free
+    region: oregon
+    databases:
+      - name: modelforge
+        databaseName: modelforge
+        user: modelforge
+
+  # API Server (Express Backend)
+  - type: web
+    name: model-forge-api
+    env: node
+    region: oregon
+    plan: free
+    buildCommand: pnpm install && pnpm run build
+    startCommand: pnpm --filter @workspace/api-server run start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 10000
+      - key: DATABASE_URL
+        fromDatabase:
+          name: model-forge-db
+          property: connectionString
+      - key: SESSION_SECRET
+        generateValue: true
+      - key: ALLOWED_ORIGINS
+        sync: false
+    healthCheckPath: /api/health
+    autoDeploy: true
+
+  # Frontend (Static Site)
+  - type: web
+    name: model-forge
+    env: static
+    region: oregon
+    plan: free
+    buildCommand: pnpm install && pnpm --filter @workspace/model-forge run build
+    staticPublishPath: ./artifacts/model-forge/dist/public
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 3000
+      - key: BASE_PATH
+        value: /
+    routes:
+      - type: rewrite
+        source: /api/*
+        destination: https://model-forge-api.onrender.com/api/*
+    headers:
+      - path: /*
+        name: X-Frame-Options
+        value: DENY
+      - path: /*
+        name: X-Content-Type-Options
+        value: nosniff
+      - path: /*
+        name: Referrer-Policy
+        value: strict-origin-when-cross-origin
+    autoDeploy: true
+
+# Made with Bob
