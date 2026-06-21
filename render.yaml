@@ -39,7 +39,6 @@ services:
   - type: web
     name: model-forge
     env: static
-    region: oregon
     plan: free
     buildCommand: pnpm install && pnpm --filter @workspace/model-forge run build
     staticPublishPath: ./artifacts/model-forge/dist/public
