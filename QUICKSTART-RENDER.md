@@ -54,15 +54,19 @@ After deployment completes:
 4. Update value to: `https://model-forge.onrender.com`
 5. Click **"Save Changes"** (triggers redeploy)
 
-### 5. Initialize Database
+### 5. Verify Database Initialization
 
 1. Go to `model-forge-api` service
-2. Click **"Shell"** tab (wait for service to be running)
-3. Run command:
-   ```bash
-   pnpm --filter @workspace/db run push
+2. Click **"Logs"** tab
+3. Verify you see these messages:
    ```
-4. Wait for "Schema pushed successfully" message
+   "Checking database connection..."
+   "Database connection successful"
+   "Server listening"
+   ```
+4. Database schema is automatically initialized on first startup
+
+**Note**: Free tier doesn't have shell access - initialization is automatic!
 
 ### 6. Test Your Deployment
 

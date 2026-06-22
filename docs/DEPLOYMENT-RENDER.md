@@ -95,16 +95,14 @@ The API service will automatically receive:
    - Value: `https://model-forge.onrender.com`
 4. Click **"Save Changes"**
 
-#### Step 5: Initialize Database Schema
+#### Step 5: Database Schema Initialization
 
-After the API service is deployed:
+The database schema is automatically initialized when the API server starts for the first time. The server will:
+1. Connect to the database
+2. Check the connection
+3. Create tables if they don't exist (via Drizzle ORM)
 
-1. Go to `model-forge-api` service
-2. Click **"Shell"** tab
-3. Run database migration:
-   ```bash
-   pnpm --filter @workspace/db run push
-   ```
+No manual intervention is required. Check the API server logs to confirm successful database initialization.
 
 ### Method 2: Manual Setup
 
@@ -148,14 +146,19 @@ If you prefer manual configuration or need more control.
 6. Click **"Create Web Service"**
 7. Wait for build and deployment (5-10 minutes)
 
-#### Step 3: Initialize Database Schema
+#### Step 3: Verify Database Initialization
 
-1. Once API service is running, click **"Shell"** tab
-2. Run:
-   ```bash
-   pnpm --filter @workspace/db run push
+1. Once API service is running, check the **"Logs"** tab
+2. Look for these log messages:
    ```
-3. Verify success message
+   "Checking database connection..."
+   "Database connection successful"
+   "Database schema check complete"
+   "Server listening"
+   ```
+3. If you see these messages, the database is ready
+
+**Note**: The free tier doesn't have shell access, so database schema is automatically initialized on first startup.
 
 #### Step 4: Deploy Frontend
 
