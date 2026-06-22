@@ -1,7 +1,6 @@
 import app from "./app";
 import { logger } from "./lib/logger";
-import { db } from "@workspace/db";
-import { sql } from "drizzle-orm";
+import { runMigrations } from "./lib/migrate";
 
 const rawPort = process.env["PORT"];
 
@@ -17,23 +16,8 @@ if (Number.isNaN(port) || port <= 0) {
   throw new Error(`Invalid PORT value: "${rawPort}"`);
 }
 
-// Initialize database schema on startup
-async function initializeDatabase() {
-  try {
-    logger.info("Checking database connection...");
-    await db.execute(sql`SELECT 1`);
-    logger.info("Database connection successful");
-    
-    // Check if tables exist, if not, they need to be created manually or via migration
-    logger.info("Database schema check complete");
-  } catch (err) {
-    logger.error({ err }, "Database initialization failed");
-    throw err;
-  }
-}
-
 // Start server after database initialization
-initializeDatabase()
+runMigrations()
   .then(() => {
     app.listen(port, (err) => {
       if (err) {
